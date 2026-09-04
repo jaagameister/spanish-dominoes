@@ -11,7 +11,7 @@ import {
   teamOf,
   DEFAULT_TARGET,
 } from '../engine/game.js';
-import { chooseMove } from '../engine/bot.js';
+import { explainChoice } from '../engine/bot.js';
 import { totalPips, isDouble } from '../engine/tiles.js';
 
 const HUMAN = 0;
@@ -38,6 +38,7 @@ let game;
 let selected = null; // tile id waiting on a choice of end
 let timer = null;
 let message = '';
+let handLog = []; // every move of the current hand, with the bots' reasoning
 
 // ----------------------------------------------------------------- tiles
 
@@ -232,8 +233,9 @@ function onTileClick(tileId) {
   render();
 }
 
-function submit(seat, tileId, end) {
+function submit(seat, tileId, end, explanation = null) {
   selected = null;
+  handLog.push({ seat, type: 'play', tileId, end, explanation });
   const result = play(game, seat, tileId, end);
   message =
     seat === HUMAN
@@ -243,6 +245,12 @@ function submit(seat, tileId, end) {
 }
 
 function submitPass(seat) {
+  const open = ends(game);
+  handLog.push({
+    seat,
+    type: 'pass',
+    ends: open ? [open.left, open.right] : null,
+  });
   const result = pass(game, seat);
   message =
     seat === HUMAN
@@ -278,8 +286,10 @@ function scheduleNext() {
   }
 
   timer = setTimeout(() => {
-    const move = chooseMove(game, seat);
-    if (move) submit(seat, move.tileId, move.end);
+    // The reasoning has to be captured before the move is applied, since
+    // playing it changes the position it was reasoning about.
+    const choice = explainChoice(game, seat);
+    if (choice) submit(seat, choice.move.tileId, choice.move.end, choice);
     else submitPass(seat);
   }, BOT_PAUSE);
 }
@@ -346,9 +356,121 @@ function onOverlayButton() {
   }
 
   startHand(game);
+  handLog = [];
   announceOpening();
   render();
   scheduleNext();
+}
+
+// ----------------------------------------------------------------- review
+
+const END_TEXT = {
+  open: 'to open',
+  left: 'on the left end',
+  right: 'on the right end',
+};
+
+function seatClass(seat) {
+  if (seat === HUMAN) return 'move--you';
+  return seat === 2 ? 'move--partner' : 'move--opponent';
+}
+
+function seatName(seat) {
+  if (seat === HUMAN) return 'You';
+  return seat === 2 ? 'Partner' : `${LABEL[seat]} opponent`;
+}
+
+function describePass(open) {
+  if (!open) return 'passed';
+  const [left, right] = open;
+  // Both ends often show the same number, and "no 2 and no 2" reads badly.
+  return left === right
+    ? `passed — held no ${left}`
+    : `passed — held no ${left} and no ${right}`;
+}
+
+function renderReview() {
+  const list = el('review-list');
+  list.innerHTML = '';
+
+  handLog.forEach((entry, index) => {
+    const item = document.createElement('li');
+    item.className = `move ${seatClass(entry.seat)}`;
+
+    const head = document.createElement('div');
+    head.className = 'move__head';
+
+    const who = document.createElement('span');
+    who.className = 'move__seat';
+    who.textContent = `${index + 1}. ${seatName(entry.seat)}`;
+
+    const what = document.createElement('span');
+    what.className = 'move__what';
+    what.textContent =
+      entry.type === 'pass'
+        ? describePass(entry.ends)
+        : `played ${entry.tileId} ${END_TEXT[entry.end]}`;
+
+    head.append(who, what);
+
+    if (entry.explanation?.forced) {
+      const tag = document.createElement('span');
+      tag.className = 'move__forced';
+      tag.textContent = 'forced';
+      head.appendChild(tag);
+    }
+
+    item.appendChild(head);
+
+    // A forced move had no reasoning behind it worth showing — saying so is
+    // more honest than listing weights that changed nothing.
+    if (entry.explanation?.forced) {
+      const note = document.createElement('p');
+      note.className = 'move__alt';
+      note.textContent = `${entry.explanation.onlyTile} was the only tile that would go down.`;
+      item.appendChild(note);
+      list.appendChild(item);
+      return;
+    }
+
+    const reasons = entry.explanation?.reasons ?? [];
+    if (reasons.length > 0) {
+      const ul = document.createElement('ul');
+      ul.className = 'move__reasons';
+      // Heaviest considerations first — that is what actually drove the choice.
+      for (const reason of [...reasons].sort(
+        (a, b) => Math.abs(b.value) - Math.abs(a.value),
+      )) {
+        const li = document.createElement('li');
+        const weight = document.createElement('span');
+        weight.className = `weight ${reason.value > 0 ? 'weight--plus' : 'weight--minus'}`;
+        weight.textContent = reason.value > 0 ? `+${reason.value}` : `${reason.value}`;
+        const text = document.createElement('span');
+        text.textContent = reason.text;
+        li.append(weight, text);
+        ul.appendChild(li);
+      }
+      item.appendChild(ul);
+    }
+
+    const runnerUp = entry.explanation?.runnerUp;
+    if (runnerUp && !entry.explanation.forced) {
+      const alt = document.createElement('p');
+      alt.className = 'move__alt';
+      const mine = entry.explanation.score;
+      const theirs = runnerUp.score;
+      const other = `${runnerUp.move.tileId} ${END_TEXT[runnerUp.move.end]}`;
+      // A dead heat is not a preference — usually both open ends show the same
+      // number, so the two placements are the same move.
+      alt.textContent =
+        Math.abs(mine - theirs) < 0.05
+          ? `Rated identically to ${other} — the choice was arbitrary.`
+          : `Preferred over ${other} (${mine.toFixed(1)} vs ${theirs.toFixed(1)}).`;
+      item.appendChild(alt);
+    }
+
+    list.appendChild(item);
+  });
 }
 
 function announceOpening() {
@@ -364,6 +486,7 @@ function announceOpening() {
 function newGame() {
   clearTimeout(timer);
   selected = null;
+  handLog = [];
   game = createGame({ targetScore: DEFAULT_TARGET });
   startHand(game);
   announceOpening();
@@ -372,6 +495,13 @@ function newGame() {
 }
 
 el('overlay-button').addEventListener('click', onOverlayButton);
+el('overlay-review').addEventListener('click', () => {
+  renderReview();
+  el('review').hidden = false;
+});
+el('review-close').addEventListener('click', () => {
+  el('review').hidden = true;
+});
 el('pick-cancel').addEventListener('click', () => {
   selected = null;
   render();

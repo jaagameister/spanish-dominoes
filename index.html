@@ -60,7 +60,24 @@
         <h2 id="overlay-title"></h2>
         <p id="overlay-body"></p>
         <div class="overlay__pips" id="overlay-pips"></div>
-        <button type="button" id="overlay-button"></button>
+        <div class="overlay__actions">
+          <button type="button" class="ghost" id="overlay-review">Review the hand</button>
+          <button type="button" id="overlay-button"></button>
+        </div>
+      </div>
+    </div>
+
+    <div class="review" id="review" hidden>
+      <div class="review__card">
+        <header class="review__head">
+          <h2>Hand review</h2>
+          <button type="button" class="ghost" id="review-close">Close</button>
+        </header>
+        <p class="review__hint">
+          Every move of the hand, and what each bot was weighing when it chose.
+          Section numbers refer to <code>STRATEGY.md</code>.
+        </p>
+        <ol class="review__list" id="review-list"></ol>
       </div>
     </div>
 
