@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Engine tests — Partner Dominoes</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #14161a;
+        --fg: #e6e8ec;
+        --muted: #8b93a1;
+        --pass: #4ade80;
+        --fail: #f87171;
+        --line: #2a2f38;
+      }
+      body {
+        margin: 0;
+        padding: 2.5rem 1.5rem;
+        background: var(--bg);
+        color: var(--fg);
+        font: 15px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+      main {
+        max-width: 46rem;
+        margin: 0 auto;
+      }
+      h1 {
+        font-size: 1.1rem;
+        letter-spacing: 0.02em;
+        margin: 0 0 1.5rem;
+      }
+      #summary {
+        padding: 0.75rem 1rem;
+        border-radius: 6px;
+        margin-bottom: 1.5rem;
+        font-weight: 600;
+      }
+      #summary.ok {
+        background: color-mix(in srgb, var(--pass) 15%, transparent);
+        color: var(--pass);
+      }
+      #summary.bad {
+        background: color-mix(in srgb, var(--fail) 15%, transparent);
+        color: var(--fail);
+      }
+      ol {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+      li {
+        padding: 0.5rem 0;
+        border-bottom: 1px solid var(--line);
+        display: grid;
+        grid-template-columns: 1.5rem 1fr;
+        gap: 0.5rem;
+      }
+      .mark.ok {
+        color: var(--pass);
+      }
+      .mark.bad {
+        color: var(--fail);
+      }
+      .err {
+        color: var(--fail);
+        font-size: 0.85em;
+        margin-top: 0.25rem;
+      }
+      .hint {
+        color: var(--muted);
+        margin-top: 2rem;
+        font-size: 0.85em;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Partner Dominoes — engine tests</h1>
+      <div id="summary">running…</div>
+      <ol id="results"></ol>
+      <p class="hint">
+        Served over HTTP because the engine uses ES modules:
+        <code>python3 -m http.server 8000</code>
+      </p>
+    </main>
+
+    <script type="module">
+      import { runTests } from './src/engine/tests.js';
+
+      const { passed, failed, results } = runTests();
+
+      const summary = document.getElementById('summary');
+      summary.textContent = failed
+        ? `${failed} failed, ${passed} passed`
+        : `all ${passed} tests passed`;
+      summary.className = failed ? 'bad' : 'ok';
+
+      const list = document.getElementById('results');
+      for (const result of results) {
+        const item = document.createElement('li');
+
+        const mark = document.createElement('span');
+        mark.className = `mark ${result.ok ? 'ok' : 'bad'}`;
+        mark.textContent = result.ok ? '✓' : '✗';
+
+        const body = document.createElement('div');
+        body.textContent = result.name;
+        if (!result.ok) {
+          const err = document.createElement('div');
+          err.className = 'err';
+          err.textContent = result.error;
+          body.appendChild(err);
+        }
+
+        item.append(mark, body);
+        list.appendChild(item);
+      }
+    </script>
+  </body>
+</html>
