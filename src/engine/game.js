@@ -57,6 +57,7 @@ export function createGame({
     line: [],
     openingTileId: null,
     passesInARow: 0,
+    lastPlayer: null,
     // Public inference: seats known to hold no tile bearing a given value,
     // proven by a pass. Bots and the UI both read this.
     knownVoids: [new Set(), new Set(), new Set(), new Set()],
@@ -158,6 +159,7 @@ export function play(state, seat, tileId, end) {
   }
 
   state.passesInARow = 0;
+  state.lastPlayer = seat;
 
   if (state.hands[seat].length === 0) return finishByDomino(state, seat);
 

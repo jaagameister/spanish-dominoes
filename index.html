@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Partner Dominoes</title>
+    <link rel="stylesheet" href="src/ui/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <h1>Partner Dominoes</h1>
+      <div class="scoreboard">
+        <div class="score score--us">
+          <span class="score__label">Us</span>
+          <span class="score__value" id="score-us">0</span>
+        </div>
+        <div class="score__target">
+          <span id="hand-number">Hand 1</span>
+          <span class="score__to">to <span id="target">100</span></span>
+        </div>
+        <div class="score score--them">
+          <span class="score__label">Them</span>
+          <span class="score__value" id="score-them">0</span>
+        </div>
+      </div>
+    </header>
+
+    <main class="table">
+      <div class="seat seat--north" id="seat-2"></div>
+      <div class="seat seat--west" id="seat-1"></div>
+
+      <div class="board">
+        <div class="board__scroll" id="board-scroll">
+          <div class="line" id="line"></div>
+        </div>
+        <p class="board__empty" id="board-empty">The table is empty.</p>
+      </div>
+
+      <div class="seat seat--east" id="seat-3"></div>
+    </main>
+
+    <div class="status" id="status"></div>
+
+    <section class="you">
+      <div class="you__header">
+        <span class="you__name">Your hand</span>
+        <span class="you__pips" id="your-pips"></span>
+      </div>
+      <div class="hand" id="hand"></div>
+      <div class="endpick" id="endpick" hidden>
+        <span class="endpick__prompt">Play it on which end?</span>
+        <button type="button" data-end="left" id="pick-left"></button>
+        <button type="button" data-end="right" id="pick-right"></button>
+        <button type="button" class="endpick__cancel" id="pick-cancel">Cancel</button>
+      </div>
+    </section>
+
+    <div class="overlay" id="overlay" hidden>
+      <div class="overlay__card">
+        <h2 id="overlay-title"></h2>
+        <p id="overlay-body"></p>
+        <div class="overlay__pips" id="overlay-pips"></div>
+        <button type="button" id="overlay-button"></button>
+      </div>
+    </div>
+
+    <script type="module" src="src/ui/app.js"></script>
+  </body>
+</html>
