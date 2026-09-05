@@ -5,6 +5,8 @@
 // just a table whose other three seats are bots, so there is exactly one code
 // path and no second copy of the rules to drift out of sync.
 
+import { toSvg } from './qr.js';
+
 const LABEL_STORAGE = 'partner-dominoes/session';
 
 /** Pip positions in a row-major 3x3 grid. */
@@ -137,7 +139,10 @@ function render() {
 
 function renderWaitingRoom() {
   el('room-code').textContent = view.code;
-  el('invite-url').textContent = inviteUrl();
+
+  const url = inviteUrl();
+  el('invite-url').textContent = url;
+  renderInviteCode(url);
 
   const roster = el('roster');
   roster.innerHTML = '';
@@ -166,8 +171,32 @@ function renderWaitingRoom() {
       : 'Start with bots';
 }
 
+/**
+ * The link to hand someone else. The host is nearly always on localhost, which
+ * would send a phone to its own loopback, so prefer the LAN origin the server
+ * reports whenever this page is being viewed locally.
+ */
+let renderedInvite = null;
+
+/** Redraw the QR only when the link actually changes — it is not free. */
+function renderInviteCode(url) {
+  if (renderedInvite === url) return;
+  renderedInvite = url;
+  try {
+    el('qr').innerHTML = toSvg(url, { dark: '#101815', light: '#f2efe4' });
+  } catch (error) {
+    // A link too long to encode should cost the table its QR, nothing more.
+    el('qr').innerHTML = '';
+    console.warn('could not render the invite QR:', error.message);
+  }
+}
+
 function inviteUrl() {
-  return `${location.origin}/?code=${view.code}`;
+  const local = ['localhost', '127.0.0.1', '::1', '[::1]'].includes(
+    location.hostname,
+  );
+  const origin = local && view.inviteOrigin ? view.inviteOrigin : location.origin;
+  return `${origin}/?code=${view.code}`;
 }
 
 // ------------------------------------------------------------------- table

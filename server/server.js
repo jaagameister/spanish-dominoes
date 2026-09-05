@@ -22,6 +22,7 @@ import {
   collectIdleRooms,
 } from './rooms.js';
 import { viewFor } from './protocol.js';
+import { setPort } from './address.js';
 
 const PORT = Number(process.env.PORT) || 8000;
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
@@ -175,7 +176,10 @@ setInterval(collectIdleRooms, 5 * 60_000).unref();
 /** Listen, resolving once bound. Port 0 picks a free one, which tests use. */
 export function start(port = PORT) {
   return new Promise((resolve) => {
-    server.listen(port, () => resolve(server));
+    server.listen(port, () => {
+      setPort(server.address().port);
+      resolve(server);
+    });
   });
 }
 

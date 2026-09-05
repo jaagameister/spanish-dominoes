@@ -11,6 +11,7 @@
 // numbers each player has proved they cannot play by passing.
 
 import { ends, legalMoves } from '../src/engine/game.js';
+import { lanOrigin } from './address.js';
 
 function tileOut(tile) {
   return { id: tile.id, high: tile.high, low: tile.low };
@@ -53,6 +54,9 @@ export function viewFor(room, seat) {
     })),
     log: logFor(room, Boolean(game) && game.phase !== 'playing'),
     message: room.message,
+    // Where another device should point to reach this table. The host's own
+    // browser only knows "localhost", which is no use to anyone else.
+    inviteOrigin: lanOrigin(),
   };
 
   if (!game) {
