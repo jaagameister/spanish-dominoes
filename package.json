@@ -1,0 +1,14 @@
+{
+  "name": "partner-dominoes",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Partnership Dominoes — the 2v2 Spanish/Latin block game, playable online",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node server/server.js",
+    "test": "node --test test/"
+  }
+}
