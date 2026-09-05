@@ -7,54 +7,117 @@
     <link rel="stylesheet" href="src/ui/styles.css" />
   </head>
   <body>
-    <header class="topbar">
-      <h1>Partner Dominoes</h1>
-      <div class="scoreboard">
-        <div class="score score--us">
-          <span class="score__label">Us</span>
-          <span class="score__value" id="score-us">0</span>
+    <!-- ------------------------------------------------------------ lobby -->
+    <section class="screen screen--centred" id="screen-lobby">
+      <div class="card card--lobby">
+        <h1 class="brand">Partner Dominoes</h1>
+        <p class="brand__sub">
+          The 2v2 block game of Spain and Latin America. Double-six, all
+          twenty-eight tiles dealt, play or pass, first team to 100.
+        </p>
+
+        <label class="field">
+          <span>Your name</span>
+          <input id="name" type="text" maxlength="16" placeholder="Freeman" autocomplete="nickname" />
+        </label>
+
+        <div class="stack">
+          <button type="button" id="btn-solo">Play on your own</button>
+          <button type="button" class="ghost" id="btn-create">Open a table for friends</button>
         </div>
-        <div class="score__target">
-          <span id="hand-number">Hand 1</span>
-          <span class="score__to">to <span id="target">100</span></span>
-        </div>
-        <div class="score score--them">
-          <span class="score__label">Them</span>
-          <span class="score__value" id="score-them">0</span>
-        </div>
-      </div>
-    </header>
 
-    <main class="table">
-      <div class="seat seat--north" id="seat-2"></div>
-      <div class="seat seat--west" id="seat-1"></div>
+        <div class="divider"><span>or join one</span></div>
 
-      <div class="board">
-        <div class="board__scroll" id="board-scroll">
-          <div class="line" id="line"></div>
-        </div>
-        <p class="board__empty" id="board-empty">The table is empty.</p>
-      </div>
+        <form class="join" id="join-form">
+          <input
+            id="join-code"
+            type="text"
+            maxlength="4"
+            placeholder="CODE"
+            autocomplete="off"
+            spellcheck="false"
+          />
+          <button type="submit">Join</button>
+        </form>
 
-      <div class="seat seat--east" id="seat-3"></div>
-    </main>
-
-    <div class="status" id="status"></div>
-
-    <section class="you">
-      <div class="you__header">
-        <span class="you__name">Your hand</span>
-        <span class="you__pips" id="your-pips"></span>
-      </div>
-      <div class="hand" id="hand"></div>
-      <div class="endpick" id="endpick" hidden>
-        <span class="endpick__prompt">Play it on which end?</span>
-        <button type="button" data-end="left" id="pick-left"></button>
-        <button type="button" data-end="right" id="pick-right"></button>
-        <button type="button" class="endpick__cancel" id="pick-cancel">Cancel</button>
+        <p class="error" id="lobby-error" hidden></p>
       </div>
     </section>
 
+    <!-- ---------------------------------------------------------- waiting -->
+    <section class="screen screen--centred" id="screen-wait" hidden>
+      <div class="card">
+        <h2>Your table is open</h2>
+        <p class="muted">Send this code to whoever you want at the table.</p>
+
+        <div class="code" id="room-code">····</div>
+        <button type="button" class="ghost copy" id="btn-copy">Copy the invite link</button>
+        <p class="muted small" id="invite-url"></p>
+
+        <ul class="roster" id="roster"></ul>
+
+        <p class="muted small">
+          Any seat still empty when you start is filled by a bot, so you can
+          begin with however many people you have.
+        </p>
+
+        <button type="button" id="btn-start">Start playing</button>
+        <p class="error" id="wait-error" hidden></p>
+      </div>
+    </section>
+
+    <!-- ------------------------------------------------------------ table -->
+    <section class="screen" id="screen-table" hidden>
+      <header class="topbar">
+        <h1>Partner Dominoes</h1>
+        <div class="scoreboard">
+          <div class="score score--us">
+            <span class="score__label">Us</span>
+            <span class="score__value" id="score-us">0</span>
+          </div>
+          <div class="score__target">
+            <span id="hand-number">Hand 1</span>
+            <span class="score__to">to <span id="target">100</span></span>
+          </div>
+          <div class="score score--them">
+            <span class="score__label">Them</span>
+            <span class="score__value" id="score-them">0</span>
+          </div>
+        </div>
+      </header>
+
+      <main class="table">
+        <div class="seat seat--north" id="seat-north"></div>
+        <div class="seat seat--west" id="seat-west"></div>
+
+        <div class="board">
+          <div class="board__scroll" id="board-scroll">
+            <div class="line" id="line"></div>
+          </div>
+          <p class="board__empty" id="board-empty">The table is empty.</p>
+        </div>
+
+        <div class="seat seat--east" id="seat-east"></div>
+      </main>
+
+      <div class="status" id="status"></div>
+
+      <section class="you">
+        <div class="you__header">
+          <span class="you__name">Your hand</span>
+          <span class="you__pips" id="your-pips"></span>
+        </div>
+        <div class="hand" id="hand"></div>
+        <div class="endpick" id="endpick" hidden>
+          <span class="endpick__prompt">Play it on which end?</span>
+          <button type="button" data-end="left" id="pick-left"></button>
+          <button type="button" data-end="right" id="pick-right"></button>
+          <button type="button" class="endpick__cancel" id="pick-cancel">Cancel</button>
+        </div>
+      </section>
+    </section>
+
+    <!-- ---------------------------------------------------------- overlay -->
     <div class="overlay" id="overlay" hidden>
       <div class="overlay__card">
         <h2 id="overlay-title"></h2>
@@ -64,6 +127,7 @@
           <button type="button" class="ghost" id="overlay-review">Review the hand</button>
           <button type="button" id="overlay-button"></button>
         </div>
+        <p class="muted small" id="overlay-countdown"></p>
       </div>
     </div>
 
@@ -80,6 +144,8 @@
         <ol class="review__list" id="review-list"></ol>
       </div>
     </div>
+
+    <div class="toast" id="disconnected" hidden>Reconnecting…</div>
 
     <script type="module" src="src/ui/app.js"></script>
   </body>

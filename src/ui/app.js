@@ -1,25 +1,11 @@
-// Interface. All game logic lives in the engine; this file only renders state
-// and turns clicks into engine calls.
+// Interface.
+//
+// The browser is a pure view layer: it renders whatever state the server sends
+// and posts moves back. It imports nothing from src/engine — playing solo is
+// just a table whose other three seats are bots, so there is exactly one code
+// path and no second copy of the rules to drift out of sync.
 
-import {
-  createGame,
-  startHand,
-  legalMoves,
-  play,
-  pass,
-  ends,
-  teamOf,
-  DEFAULT_TARGET,
-} from '../engine/game.js';
-import { explainChoice } from '../engine/bot.js';
-import { totalPips, isDouble } from '../engine/tiles.js';
-
-const HUMAN = 0;
-const LABEL = ['You', 'Left', 'Partner', 'Right'];
-const BOT_PAUSE = 850;
-
-/** Where each seat sits on the table grid. */
-const POSITION = { 1: 'seat--west', 2: 'seat--north', 3: 'seat--east' };
+const LABEL_STORAGE = 'partner-dominoes/session';
 
 /** Pip positions in a row-major 3x3 grid. */
 const PIP_CELLS = {
@@ -32,15 +18,80 @@ const PIP_CELLS = {
   6: [0, 2, 3, 5, 6, 8],
 };
 
+const END_TEXT = {
+  open: 'to open',
+  left: 'on the left end',
+  right: 'on the right end',
+};
+
 const el = (id) => document.getElementById(id);
 
-let game;
+let session = null; // { code, token, seat }
+let view = null;
 let selected = null; // tile id waiting on a choice of end
-let timer = null;
-let message = '';
-let handLog = []; // every move of the current hand, with the bots' reasoning
+let stream = null;
+let overlayDismissed = false;
 
-// ----------------------------------------------------------------- tiles
+// ------------------------------------------------------------------- state
+
+function saveSession(next) {
+  session = next;
+  try {
+    localStorage.setItem(LABEL_STORAGE, JSON.stringify(next));
+  } catch {
+    // Private browsing; the session simply won't survive a refresh.
+  }
+}
+
+function loadSession() {
+  try {
+    const raw = localStorage.getItem(LABEL_STORAGE);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function clearSession() {
+  session = null;
+  try {
+    localStorage.removeItem(LABEL_STORAGE);
+  } catch {
+    /* ignore */
+  }
+}
+
+async function api(path, body) {
+  const res = await fetch(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body ?? {}),
+  });
+  return res.json();
+}
+
+// -------------------------------------------------------------------- seats
+
+/**
+ * Where each seat sits on screen, relative to the viewer: you at the bottom,
+ * your partner across, opponents on the flanks.
+ */
+function positions() {
+  const me = view.seat;
+  return {
+    west: (me + 1) % 4,
+    north: (me + 2) % 4,
+    east: (me + 3) % 4,
+  };
+}
+
+function nameOf(seat) {
+  const player = view.players[seat];
+  if (!player) return `Seat ${seat}`;
+  return seat === view.seat ? 'You' : player.name;
+}
+
+// -------------------------------------------------------------------- tiles
 
 function half(value) {
   const node = document.createElement('div');
@@ -54,10 +105,6 @@ function half(value) {
   return node;
 }
 
-/**
- * `first`/`second` are the two faces in reading order — left-to-right for a
- * horizontal tile, top-to-bottom for a vertical one.
- */
 function tileNode(first, second, orientation) {
   const node = document.createElement('div');
   node.className = `tile tile--${orientation}`;
@@ -65,37 +112,99 @@ function tileNode(first, second, orientation) {
   return node;
 }
 
-// ----------------------------------------------------------------- render
+// ------------------------------------------------------------------ screens
+
+function show(screen) {
+  for (const id of ['screen-lobby', 'screen-wait', 'screen-table']) {
+    el(id).hidden = id !== screen;
+  }
+}
 
 function render() {
-  const target = game.targetScore;
-  el('score-us').textContent = game.scores[teamOf(HUMAN)];
-  el('score-them').textContent = game.scores[1 - teamOf(HUMAN)];
-  el('target').textContent = target;
-  el('hand-number').textContent = `Hand ${game.handNumber}`;
+  if (!view) return;
+
+  if (view.status === 'lobby') {
+    show('screen-wait');
+    renderWaitingRoom();
+    return;
+  }
+
+  show('screen-table');
+  renderTable();
+}
+
+// ------------------------------------------------------------ waiting room
+
+function renderWaitingRoom() {
+  el('room-code').textContent = view.code;
+  el('invite-url').textContent = inviteUrl();
+
+  const roster = el('roster');
+  roster.innerHTML = '';
+  view.players.forEach((player, seat) => {
+    const item = document.createElement('li');
+    const filled = player.kind === 'human';
+    item.className = filled ? 'roster__seat roster__seat--taken' : 'roster__seat';
+
+    const who = document.createElement('span');
+    who.textContent = filled ? nameOf(seat) : 'Empty — a bot will sit here';
+
+    const tag = document.createElement('span');
+    tag.className = 'roster__tag';
+    // Partners face each other, so the seat you take decides your team.
+    tag.textContent = seat % 2 === view.seat % 2 ? 'Your team' : 'Other team';
+
+    item.append(who, tag);
+    roster.appendChild(item);
+  });
+
+  const host = view.seat === view.hostSeat;
+  el('btn-start').hidden = !host;
+  el('btn-start').textContent =
+    view.players.filter((p) => p.kind === 'human').length > 1
+      ? 'Start playing'
+      : 'Start with bots';
+}
+
+function inviteUrl() {
+  return `${location.origin}/?code=${view.code}`;
+}
+
+// ------------------------------------------------------------------- table
+
+function renderTable() {
+  const usTeam = view.seat % 2;
+  el('score-us').textContent = view.scores[usTeam];
+  el('score-them').textContent = view.scores[1 - usTeam];
+  el('target').textContent = view.targetScore;
+  el('hand-number').textContent = `Hand ${view.handNumber}`;
 
   renderSeats();
   renderLine();
   renderHand();
   renderStatus();
   renderEndPicker();
+  renderOverlay();
 }
 
 function renderSeats() {
-  for (const seat of [1, 2, 3]) {
-    const panel = el(`seat-${seat}`);
-    panel.className = `seat ${POSITION[seat]}`;
-    if (seat === 2) panel.classList.add('seat--partner');
-    if (game.turn === seat) panel.classList.add('seat--active');
+  const where = positions();
+  for (const [side, seat] of Object.entries(where)) {
+    const panel = el(`seat-${side}`);
+    panel.className = `seat seat--${side}`;
+    if (seat === (view.seat + 2) % 4) panel.classList.add('seat--partner');
+    if (view.turn === seat) panel.classList.add('seat--active');
     panel.innerHTML = '';
+
+    const player = view.players[seat];
 
     const name = document.createElement('div');
     name.className = 'seat__name';
-    name.textContent = seat === 2 ? 'Partner' : `${LABEL[seat]} opponent`;
+    name.textContent = seat === (view.seat + 2) % 4 ? `${player.name} — partner` : player.name;
 
     const count = document.createElement('div');
     count.className = 'seat__count';
-    for (let i = 0; i < game.hands[seat].length; i++) {
+    for (let i = 0; i < player.tiles; i++) {
       const back = document.createElement('span');
       back.className = 'back';
       count.appendChild(back);
@@ -103,18 +212,19 @@ function renderSeats() {
 
     const meta = document.createElement('div');
     meta.className = 'seat__meta';
-    const held = game.hands[seat].length;
-    meta.textContent = `${held} tile${held === 1 ? '' : 's'}`;
+    meta.textContent = `${player.tiles} tile${player.tiles === 1 ? '' : 's'}`;
+    if (player.kind === 'human' && !player.connected) {
+      meta.textContent += ' · offline';
+    }
 
     panel.append(name, count, meta);
 
-    // A pass is public information — every player at a real table tracks it.
-    const voids = [...game.knownVoids[seat]].sort((a, b) => a - b);
-    if (voids.length > 0) {
+    // A pass is public at a real table, so showing it is bookkeeping, not help.
+    if (player.voids.length > 0) {
       const row = document.createElement('div');
       row.className = 'seat__voids';
       row.append('void in');
-      for (const value of voids) {
+      for (const value of player.voids) {
         const chip = document.createElement('span');
         chip.className = 'void';
         chip.textContent = value;
@@ -128,44 +238,42 @@ function renderSeats() {
 function renderLine() {
   const line = el('line');
   line.innerHTML = '';
-  const open = ends(game);
-  el('board-empty').hidden = game.line.length > 0;
-
-  if (!open) return;
+  el('board-empty').hidden = view.line.length > 0;
+  if (!view.ends) return;
 
   const left = document.createElement('span');
   left.className = 'end-marker';
-  left.textContent = `end ${open.left}`;
+  left.textContent = `end ${view.ends.left}`;
   line.appendChild(left);
 
-  for (const placed of game.line) {
-    // Doubles are laid crosswise, as they are on a real table.
-    line.appendChild(
-      isDouble(placed.tile)
-        ? tileNode(placed.a, placed.b, 'v')
-        : tileNode(placed.a, placed.b, 'h'),
-    );
+  for (const placed of view.line) {
+    // Doubles are laid crosswise, as on a real table.
+    line.appendChild(tileNode(placed.a, placed.b, placed.double ? 'v' : 'h'));
   }
 
   const right = document.createElement('span');
   right.className = 'end-marker';
-  right.textContent = `end ${open.right}`;
+  right.textContent = `end ${view.ends.right}`;
   line.appendChild(right);
+
+  const scroller = el('board-scroll');
+  scroller.scrollLeft = (scroller.scrollWidth - scroller.clientWidth) / 2;
 }
 
 function movesForTile(tileId) {
-  return legalMoves(game, HUMAN).filter((move) => move.tileId === tileId);
+  return view.legalMoves.filter((move) => move.tileId === tileId);
 }
 
 function renderHand() {
   const hand = el('hand');
   hand.innerHTML = '';
-  const myTiles = game.hands[HUMAN];
-  el('your-pips').textContent = `${totalPips(myTiles)} pips`;
 
-  const myTurn = game.turn === HUMAN && game.phase === 'playing';
+  const pips = view.hand.reduce((sum, t) => sum + t.high + t.low, 0);
+  el('your-pips').textContent = `${pips} pips`;
 
-  for (const tile of myTiles) {
+  const myTurn = view.turn === view.seat && view.phase === 'playing';
+
+  for (const tile of view.hand) {
     const node = tileNode(tile.high, tile.low, 'v');
     const moves = myTurn ? movesForTile(tile.id) : [];
 
@@ -183,134 +291,86 @@ function renderHand() {
 
 function renderStatus() {
   const status = el('status');
-  status.className = 'status';
   status.innerHTML = '';
-
   const text = document.createElement('span');
-  if (message) {
-    text.innerHTML = message;
-  } else if (game.turn === HUMAN) {
-    text.innerHTML = '<strong>Your turn.</strong>';
-  } else if (game.turn !== null) {
-    text.textContent = `${LABEL[game.turn]} is thinking…`;
+
+  if (view.phase === 'playing' && view.turn === view.seat) {
+    text.innerHTML =
+      view.legalMoves.length === 0
+        ? 'Nothing you can play — you must <strong>pass</strong>.'
+        : '<strong>Your turn.</strong>';
+  } else {
+    text.textContent = view.message ?? '';
   }
+
   status.appendChild(text);
 }
 
 function renderEndPicker() {
   const picker = el('endpick');
-  if (!selected) {
+  if (!selected || !view.ends) {
     picker.hidden = true;
     return;
   }
-  const open = ends(game);
   const moves = movesForTile(selected);
   picker.hidden = false;
 
   for (const end of ['left', 'right']) {
     const button = el(`pick-${end}`);
-    const available = moves.some((move) => move.end === end);
-    button.hidden = !available;
-    button.textContent = `${end === 'left' ? 'Left' : 'Right'} end (${
-      end === 'left' ? open.left : open.right
-    })`;
+    button.hidden = !moves.some((move) => move.end === end);
+    button.textContent = `${end === 'left' ? 'Left' : 'Right'} end (${view.ends[end]})`;
   }
 }
 
-// ------------------------------------------------------------ interaction
+// -------------------------------------------------------------- interaction
 
 function onTileClick(tileId) {
   const moves = movesForTile(tileId);
   if (moves.length === 0) return;
 
   if (moves.length === 1) {
-    submit(HUMAN, tileId, moves[0].end);
+    play(tileId, moves[0].end);
     return;
   }
-  // The tile fits both ends, and which one you pick matters — see STRATEGY.md
-  // on cuadrar. Let the player decide.
+  // The tile fits both ends, and which one matters — see STRATEGY.md on
+  // cuadrar. Let the player choose.
   selected = tileId;
   render();
 }
 
-function submit(seat, tileId, end, explanation = null) {
+async function play(tileId, end) {
   selected = null;
-  handLog.push({ seat, type: 'play', tileId, end, explanation });
-  const result = play(game, seat, tileId, end);
-  message =
-    seat === HUMAN
-      ? `You played <strong>${tileId}</strong>.`
-      : `${LABEL[seat]} played <strong>${tileId}</strong>.`;
-  afterMove(result);
-}
-
-function submitPass(seat) {
-  const open = ends(game);
-  handLog.push({
-    seat,
-    type: 'pass',
-    ends: open ? [open.left, open.right] : null,
+  const result = await api(`/api/rooms/${session.code}/action`, {
+    token: session.token,
+    type: 'play',
+    tileId,
+    end,
   });
-  const result = pass(game, seat);
-  message =
-    seat === HUMAN
-      ? 'You had nothing to play and <strong>passed</strong>.'
-      : `${LABEL[seat]} <strong>passed</strong>.`;
-  afterMove(result);
+  if (result.error) flash(result.error);
 }
 
-function afterMove(result) {
-  render();
-  scrollBoard();
+// ------------------------------------------------------------------ results
 
-  if (game.phase === 'playing') {
-    scheduleNext();
-  } else {
-    showResult(result);
-  }
-}
+function renderOverlay() {
+  const overlay = el('overlay');
+  const over = view.phase === 'handOver' || view.phase === 'gameOver';
 
-function scheduleNext() {
-  clearTimeout(timer);
-  if (game.phase !== 'playing') return;
-
-  const seat = game.turn;
-
-  if (seat === HUMAN) {
-    // A player with no legal tile must pass; do it for them after a beat so the
-    // reason is visible rather than instant.
-    if (legalMoves(game, HUMAN).length === 0) {
-      timer = setTimeout(() => submitPass(HUMAN), BOT_PAUSE);
-    }
+  if (!over || overlayDismissed) {
+    overlay.hidden = true;
     return;
   }
 
-  timer = setTimeout(() => {
-    // The reasoning has to be captured before the move is applied, since
-    // playing it changes the position it was reasoning about.
-    const choice = explainChoice(game, seat);
-    if (choice) submit(seat, choice.move.tileId, choice.move.end, choice);
-    else submitPass(seat);
-  }, BOT_PAUSE);
-}
+  const result = view.handResult;
+  if (!result) return;
 
-function scrollBoard() {
-  const scroller = el('board-scroll');
-  scroller.scrollLeft = (scroller.scrollWidth - scroller.clientWidth) / 2;
-}
-
-// ---------------------------------------------------------------- results
-
-function showResult(result) {
-  const usTeam = teamOf(HUMAN);
+  const usTeam = view.seat % 2;
   const weWon = result.winningTeam === usTeam;
-  const overlay = el('overlay');
 
   let title;
   let body;
 
   if (result.type === 'domino') {
-    const who = result.winningSeat === HUMAN ? 'You' : LABEL[result.winningSeat];
+    const who = nameOf(result.winningSeat);
     title = weWon ? 'Hand won' : 'Hand lost';
     body = `${who} went out. ${
       weWon ? 'Your side' : 'Their side'
@@ -325,9 +385,9 @@ function showResult(result) {
     body = 'Both teams held exactly the same number of pips, so nobody scores.';
   }
 
-  if (result.gameOver) {
-    title = result.winningTeam === usTeam ? 'You win the match' : 'They win the match';
-    body += ` Final score ${game.scores[usTeam]}–${game.scores[1 - usTeam]}.`;
+  if (view.phase === 'gameOver') {
+    title = weWon ? 'You win the match' : 'They win the match';
+    body += ` Final score ${view.scores[usTeam]}–${view.scores[1 - usTeam]}.`;
   }
 
   el('overlay-title').textContent = title;
@@ -343,41 +403,30 @@ function showResult(result) {
     el('overlay-pips').appendChild(box);
   }
 
-  el('overlay-button').textContent = result.gameOver ? 'New match' : 'Next hand';
+  const finished = view.phase === 'gameOver';
+  el('overlay-button').textContent = finished ? 'Leave the table' : 'Deal the next hand';
+  el('overlay-countdown').textContent = finished
+    ? ''
+    : 'The next hand deals on its own shortly.';
   overlay.hidden = false;
 }
 
-function onOverlayButton() {
-  el('overlay').hidden = true;
-
-  if (game.phase === 'gameOver') {
-    newGame();
+async function onOverlayButton() {
+  if (view.phase === 'gameOver') {
+    leaveTable();
     return;
   }
-
-  startHand(game);
-  handLog = [];
-  announceOpening();
-  render();
-  scheduleNext();
+  overlayDismissed = true;
+  el('overlay').hidden = true;
+  const result = await api(`/api/rooms/${session.code}/ready`, { token: session.token });
+  if (result.error) flash(result.error);
 }
 
-// ----------------------------------------------------------------- review
-
-const END_TEXT = {
-  open: 'to open',
-  left: 'on the left end',
-  right: 'on the right end',
-};
+// ------------------------------------------------------------------- review
 
 function seatClass(seat) {
-  if (seat === HUMAN) return 'move--you';
-  return seat === 2 ? 'move--partner' : 'move--opponent';
-}
-
-function seatName(seat) {
-  if (seat === HUMAN) return 'You';
-  return seat === 2 ? 'Partner' : `${LABEL[seat]} opponent`;
+  if (seat === view.seat) return 'move--you';
+  return seat === (view.seat + 2) % 4 ? 'move--partner' : 'move--opponent';
 }
 
 function describePass(open) {
@@ -393,7 +442,7 @@ function renderReview() {
   const list = el('review-list');
   list.innerHTML = '';
 
-  handLog.forEach((entry, index) => {
+  view.log.forEach((entry, index) => {
     const item = document.createElement('li');
     item.className = `move ${seatClass(entry.seat)}`;
 
@@ -402,7 +451,7 @@ function renderReview() {
 
     const who = document.createElement('span');
     who.className = 'move__seat';
-    who.textContent = `${index + 1}. ${seatName(entry.seat)}`;
+    who.textContent = `${index + 1}. ${nameOf(entry.seat)}`;
 
     const what = document.createElement('span');
     what.className = 'move__what';
@@ -422,8 +471,6 @@ function renderReview() {
 
     item.appendChild(head);
 
-    // A forced move had no reasoning behind it worth showing — saying so is
-    // more honest than listing weights that changed nothing.
     if (entry.explanation?.forced) {
       const note = document.createElement('p');
       note.className = 'move__alt';
@@ -437,7 +484,7 @@ function renderReview() {
     if (reasons.length > 0) {
       const ul = document.createElement('ul');
       ul.className = 'move__reasons';
-      // Heaviest considerations first — that is what actually drove the choice.
+      // Heaviest considerations first — that is what drove the choice.
       for (const reason of [...reasons].sort(
         (a, b) => Math.abs(b.value) - Math.abs(a.value),
       )) {
@@ -454,14 +501,12 @@ function renderReview() {
     }
 
     const runnerUp = entry.explanation?.runnerUp;
-    if (runnerUp && !entry.explanation.forced) {
+    if (runnerUp) {
       const alt = document.createElement('p');
       alt.className = 'move__alt';
       const mine = entry.explanation.score;
       const theirs = runnerUp.score;
       const other = `${runnerUp.move.tileId} ${END_TEXT[runnerUp.move.end]}`;
-      // A dead heat is not a preference — usually both open ends show the same
-      // number, so the two placements are the same move.
       alt.textContent =
         Math.abs(mine - theirs) < 0.05
           ? `Rated identically to ${other} — the choice was arbitrary.`
@@ -473,26 +518,105 @@ function renderReview() {
   });
 }
 
-function announceOpening() {
-  const who = game.starter === HUMAN ? 'You' : LABEL[game.starter];
-  message =
-    game.handNumber === 1
-      ? `${who} hold the double-six and must open with it.`
-      : `${who} open this hand.`;
+// ---------------------------------------------------------------- streaming
+
+function connect() {
+  stream?.close();
+  stream = new EventSource(
+    `/api/rooms/${session.code}/stream?token=${encodeURIComponent(session.token)}`,
+  );
+
+  stream.onmessage = (event) => {
+    el('disconnected').hidden = true;
+    const next = JSON.parse(event.data);
+
+    // A fresh hand clears any overlay the player dismissed on the last one.
+    if (view && next.handNumber !== view.handNumber) overlayDismissed = false;
+
+    view = next;
+    render();
+  };
+
+  stream.onerror = () => {
+    // EventSource retries on its own; just say so.
+    el('disconnected').hidden = false;
+  };
 }
 
-// ------------------------------------------------------------------- boot
-
-function newGame() {
-  clearTimeout(timer);
-  selected = null;
-  handLog = [];
-  game = createGame({ targetScore: DEFAULT_TARGET });
-  startHand(game);
-  announceOpening();
-  render();
-  scheduleNext();
+function leaveTable() {
+  stream?.close();
+  stream = null;
+  view = null;
+  clearSession();
+  el('overlay').hidden = true;
+  show('screen-lobby');
 }
+
+// -------------------------------------------------------------------- lobby
+
+function flash(message, target = 'lobby-error') {
+  const node = el(target);
+  node.textContent = message;
+  node.hidden = false;
+  setTimeout(() => {
+    node.hidden = true;
+  }, 4000);
+}
+
+function playerName() {
+  const typed = el('name').value.trim();
+  return typed || 'Player';
+}
+
+async function openTable({ solo }) {
+  const result = await api('/api/rooms', { name: playerName() });
+  if (result.error) return flash(result.error);
+
+  saveSession({ code: result.code, token: result.token, seat: result.seat });
+  connect();
+
+  if (solo) {
+    const started = await api(`/api/rooms/${result.code}/start`, { token: result.token });
+    if (started.error) flash(started.error);
+  }
+}
+
+async function joinTable(code) {
+  const result = await api(`/api/rooms/${code.toUpperCase()}/join`, { name: playerName() });
+  if (result.error) return flash(result.error);
+
+  saveSession({ code: result.code, token: result.token, seat: result.seat });
+  connect();
+}
+
+// --------------------------------------------------------------------- boot
+
+el('btn-solo').addEventListener('click', () => openTable({ solo: true }));
+el('btn-create').addEventListener('click', () => openTable({ solo: false }));
+
+el('join-form').addEventListener('submit', (event) => {
+  event.preventDefault();
+  const code = el('join-code').value.trim();
+  if (code.length === 4) joinTable(code);
+  else flash('A table code is four characters.');
+});
+
+el('btn-start').addEventListener('click', async () => {
+  const result = await api(`/api/rooms/${session.code}/start`, { token: session.token });
+  if (result.error) flash(result.error, 'wait-error');
+});
+
+el('btn-copy').addEventListener('click', async () => {
+  try {
+    await navigator.clipboard.writeText(inviteUrl());
+    el('btn-copy').textContent = 'Link copied';
+    setTimeout(() => {
+      el('btn-copy').textContent = 'Copy the invite link';
+    }, 2000);
+  } catch {
+    flash('Copy failed — the link is written below.', 'wait-error');
+  }
+});
 
 el('overlay-button').addEventListener('click', onOverlayButton);
 el('overlay-review').addEventListener('click', () => {
@@ -508,8 +632,19 @@ el('pick-cancel').addEventListener('click', () => {
 });
 for (const end of ['left', 'right']) {
   el(`pick-${end}`).addEventListener('click', () => {
-    if (selected) submit(HUMAN, selected, end);
+    if (selected) play(selected, end);
   });
 }
 
-newGame();
+// An invite link carries the code; drop it into the join box.
+const invited = new URLSearchParams(location.search).get('code');
+if (invited) el('join-code').value = invited.toUpperCase().slice(0, 4);
+
+// Rejoin whatever table this browser was last sitting at.
+const saved = loadSession();
+if (saved?.code && saved?.token) {
+  session = saved;
+  connect();
+} else {
+  show('screen-lobby');
+}

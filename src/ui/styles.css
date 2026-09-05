@@ -37,10 +37,208 @@ body {
   background: var(--bg);
   color: var(--fg);
   font: 15px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+.screen {
+  min-height: 100vh;
+  padding: 1rem;
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
-  padding: 1rem;
+}
+
+.screen--centred {
+  align-items: center;
+  justify-content: center;
+}
+
+/* ---------------------------------------------------------- lobby cards */
+
+.card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 1.75rem;
+  width: min(28rem, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.card h2 {
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.brand {
+  margin: 0;
+  font-size: 1.5rem;
+  letter-spacing: -0.01em;
+}
+
+.brand__sub {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.88rem;
+  line-height: 1.6;
+}
+
+.muted {
+  color: var(--muted);
+  margin: 0;
+}
+
+.small {
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+input[type='text'] {
+  font: inherit;
+  font-size: 0.95rem;
+  text-transform: none;
+  letter-spacing: normal;
+  color: var(--fg);
+  background: #101815;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0.5rem 0.7rem;
+  width: 100%;
+}
+
+input[type='text']:focus {
+  outline: none;
+  border-color: var(--us);
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.stack button {
+  padding: 0.6rem 1rem;
+}
+
+.divider {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: var(--muted);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.divider::before,
+.divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+}
+
+.join {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.join input {
+  text-transform: uppercase;
+  letter-spacing: 0.3em;
+  font-weight: 600;
+  text-align: center;
+}
+
+.error {
+  margin: 0;
+  color: #f87171;
+  font-size: 0.85rem;
+}
+
+/* --------------------------------------------------------- waiting room */
+
+.code {
+  font-size: 2.6rem;
+  font-weight: 700;
+  letter-spacing: 0.35em;
+  text-align: center;
+  padding: 0.6rem 0 0.6rem 0.35em;
+  background: #101815;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+.copy {
+  align-self: center;
+}
+
+#invite-url {
+  text-align: center;
+  word-break: break-all;
+  font-size: 0.75rem;
+}
+
+.roster {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.roster__seat {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.5rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 0.88rem;
+  color: var(--muted);
+}
+
+.roster__seat--taken {
+  color: var(--fg);
+  border-color: #2f6b4c;
+  background: #131f19;
+}
+
+.roster__tag {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--muted);
+}
+
+/* ---------------------------------------------------------------- toast */
+
+.toast {
+  position: fixed;
+  bottom: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #3a2020;
+  border: 1px solid #5c2f2f;
+  color: #f6b8b8;
+  padding: 0.5rem 1rem;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  z-index: 30;
 }
 
 /* ------------------------------------------------------------ top bar */

@@ -57,36 +57,62 @@ it doubles as a description of how they think.
 
 ## Running it
 
-No dependencies and no build step. From the project root:
+Node 20 or newer, and no dependencies at all — there is nothing to `npm install`.
 
 ```bash
-python3 -m http.server 8000
+npm start
 ```
 
 Then open <http://localhost:8000/>.
 
-(Opening `index.html` directly off the filesystem will not work — the code uses
-ES modules, which browsers only load over HTTP.)
+## Playing with other people
+
+Open a table and you get a four-character code and an invite link. Anyone who
+joins takes the next seat, and **seats alternate between the teams**, so the
+second person to sit down is your opponent and the third is your partner. Any
+seat still empty when you start is filled by a bot, so a table works with one,
+two, three or four people.
+
+The server listens on every interface, so anyone on the same network can join at
+`http://<your-lan-ip>:8000`. Reaching it from outside your network needs a
+tunnel or real hosting; nothing here assumes either.
+
+Playing on your own is the same thing with all three other seats taken by bots —
+there is no separate single-player mode, and so no second copy of the rules.
 
 ## Tests
 
-The engine has no dependencies and is tested in the browser. With the server
-running, open <http://localhost:8000/tests.html>.
+```bash
+npm test
+```
+
+31 tests: the engine, and the server's API and redaction guarantees. The engine
+cases live in `src/engine/tests.js` and are driven by both `node --test` and the
+browser page at <http://localhost:8000/tests.html>, so the two runners can never
+disagree about what passes.
 
 ## Layout
 
 ```
 src/engine/tiles.js   the double-6 set: tiles, pips, shuffling — pure functions
 src/engine/game.js    game state machine: deal, legal moves, passing, scoring
-src/engine/bot.js     bot opponents
-src/ui/app.js         rendering and interaction
+src/engine/bot.js     bot opponents, and the reasons behind each move
+src/ui/app.js         rendering and interaction — a pure view layer
+server/server.js      HTTP, static files, JSON API, one SSE stream per player
+server/rooms.js       rooms, seating, bots, turn scheduling
+server/protocol.js    what each player is allowed to see
 ```
 
-The engine has no knowledge of the DOM, the bots, or the network. Everything
-goes through its public API — `startHand`, `legalMoves`, `play`, `pass` — which
-keeps the door open for real online multiplayer later: the same state machine
-can run authoritatively on a server with moves arriving over the wire instead of
-from bots.
+Two boundaries hold this together.
+
+**The engine knows nothing about the DOM, the bots, or the network.** Everything
+goes through `startHand`, `legalMoves`, `play` and `pass`, which is why the same
+files run in the browser and authoritatively on the server.
+
+**`server/protocol.js` is the only code permitted to read `game.hands`.** Every
+message to every client passes through it, so no player is ever sent another
+player's tiles. Keeping that in one function is what makes the guarantee
+checkable rather than merely intended — and it is tested directly.
 
 ## Rules sources
 
