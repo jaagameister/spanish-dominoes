@@ -97,8 +97,16 @@ function openStream(req, res, room, seat) {
   });
   res.write('retry: 2000\n\n');
 
-  const unsubscribe = subscribe(room, seat, res);
-  req.on('close', unsubscribe);
+  // Headers are already out, so an error here cannot be turned into a JSON
+  // response. End the stream instead — a client that hangs on a half-open
+  // connection is far worse to debug than one that sees it close.
+  try {
+    const unsubscribe = subscribe(room, seat, res);
+    req.on('close', unsubscribe);
+  } catch (error) {
+    res.write(`event: error\ndata: ${JSON.stringify({ error: error.message })}\n\n`);
+    res.end();
+  }
 }
 
 const server = createServer(async (req, res) => {
@@ -164,6 +172,18 @@ const server = createServer(async (req, res) => {
 setInterval(heartbeat, 25_000).unref();
 setInterval(collectIdleRooms, 5 * 60_000).unref();
 
-server.listen(PORT, () => {
-  console.log(`Partner Dominoes on http://localhost:${PORT}`);
-});
+/** Listen, resolving once bound. Port 0 picks a free one, which tests use. */
+export function start(port = PORT) {
+  return new Promise((resolve) => {
+    server.listen(port, () => resolve(server));
+  });
+}
+
+export { server };
+
+// Only self-start when run directly, so tests can import this module.
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+  start().then((s) => {
+    console.log(`Partner Dominoes on http://localhost:${s.address().port}`);
+  });
+}

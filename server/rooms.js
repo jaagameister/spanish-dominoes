@@ -30,6 +30,17 @@ const CODE_ALPHABET = 'BCDFGHJKLMNPQRSTVWXYZ23456789';
 
 const rooms = new Map();
 
+/**
+ * A scheduled turn should never be the reason the process stays alive — the
+ * listening socket is. Unreferencing lets a test process exit once it stops
+ * serving, instead of being held open by tables still dealing to bots.
+ */
+function later(fn, ms) {
+  const timer = setTimeout(fn, ms);
+  timer.unref?.();
+  return timer;
+}
+
 function makeCode() {
   let code;
   do {
@@ -188,7 +199,7 @@ function afterMove(room, result) {
 
   // Hand over: leave it on screen long enough to review, then deal again.
   clearTimeout(room.timer);
-  room.timer = setTimeout(() => dealHand(room), HAND_REVIEW_MS);
+  room.timer = later(() => dealHand(room), HAND_REVIEW_MS);
 }
 
 /** Drive bot turns, and auto-pass for anyone with no legal tile. */
@@ -203,13 +214,13 @@ function scheduleTurn(room) {
   if (legalMoves(game, seat).length === 0) {
     // Passing is compulsory, so the server does it rather than waiting on a
     // client that has no choice to make.
-    room.timer = setTimeout(() => applyPass(room, seat), FORCED_PASS_PAUSE_MS);
+    room.timer = later(() => applyPass(room, seat), FORCED_PASS_PAUSE_MS);
     return;
   }
 
   if (player.kind !== 'bot') return;
 
-  room.timer = setTimeout(() => {
+  room.timer = later(() => {
     const choice = explainChoice(game, seat, { difficulty: player.difficulty });
     if (choice) {
       applyPlay(room, seat, choice.move.tileId, choice.move.end, choice);

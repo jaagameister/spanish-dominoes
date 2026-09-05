@@ -29,11 +29,13 @@ function logFor(room, revealReasoning) {
 }
 
 /**
- * The state as `seat` is entitled to see it. Pass `seat = null` for a spectator
- * view, which reveals no hands at all.
+ * The state as `seat` is entitled to see it. Anything that is not a real seat —
+ * `null`, or the -1 that an unrecognized token resolves to — gets the spectator
+ * view, which reveals no hand at all.
  */
 export function viewFor(room, seat) {
   const game = room.game;
+  const seated = Number.isInteger(seat) && seat >= 0 && seat < room.seats.length;
 
   const base = {
     code: room.code,
@@ -76,7 +78,7 @@ export function viewFor(room, seat) {
     ends: open,
     handResult: game.handResult,
     // The only hand ever serialized is the recipient's own.
-    hand: seat === null ? [] : game.hands[seat].map(tileOut),
-    legalMoves: seat === null ? [] : legalMoves(game, seat),
+    hand: seated ? game.hands[seat].map(tileOut) : [],
+    legalMoves: seated ? legalMoves(game, seat) : [],
   };
 }
