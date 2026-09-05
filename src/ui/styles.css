@@ -447,6 +447,42 @@ input[type='text']:focus {
   pointer-events: none;
 }
 
+.ends {
+  position: absolute;
+  top: 0.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: rgb(9 16 13 / 0.85);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0.25rem 0.7rem;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.ends__label {
+  font-size: 0.62rem;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.ends__value {
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.35rem;
+  height: 1.35rem;
+  border-radius: 4px;
+  background: var(--bone);
+  color: var(--pip);
+  font-weight: 700;
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+
 .end-marker {
   align-self: center;
   font-size: 0.65rem;
@@ -832,14 +868,69 @@ button:hover {
 /* ----------------------------------------------------------- narrower */
 
 @media (max-width: 720px) {
+  .screen {
+    padding: 0.6rem;
+  }
+
   .table {
     grid-template-columns: 1fr 1fr;
     grid-template-areas:
       "north north"
       "board board"
       "west  east";
+    /* Let the board take what is left rather than forcing a tall minimum. */
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    min-height: 0;
+    gap: 0.5rem;
   }
+
   .seat--north {
     justify-self: stretch;
+  }
+
+  .board {
+    min-height: 7rem;
+  }
+
+  .board__scroll {
+    padding: 0.75rem 0.5rem;
+  }
+
+  /* The seat panels are reference, not the main event — shrink them. */
+  .seat {
+    padding: 0.45rem 0.55rem;
+    gap: 0.25rem;
+  }
+
+  .seat__name {
+    font-size: 0.68rem;
+  }
+
+  .back {
+    width: 7px;
+    height: 13px;
+  }
+
+  .topbar h1 {
+    font-size: 0.8rem;
+  }
+
+  .scoreboard {
+    padding: 0.3rem 0.7rem;
+    gap: 0.75rem;
+  }
+
+  .score__value {
+    font-size: 1.15rem;
+  }
+
+  /* Tiles stay big: they are the tap targets. */
+  .hand {
+    gap: 0.3rem;
+    min-height: 0;
+  }
+
+  .hand .tile {
+    --half: 30px;
   }
 }

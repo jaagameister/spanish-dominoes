@@ -91,6 +91,13 @@
         <div class="seat seat--west" id="seat-west"></div>
 
         <div class="board">
+          <!-- The open ends decide every move, and a long line scrolls them off
+               screen, so they are pinned here as well. -->
+          <div class="ends" id="ends" hidden>
+            <span class="ends__label">open ends</span>
+            <span class="ends__value" id="end-left">–</span>
+            <span class="ends__value" id="end-right">–</span>
+          </div>
           <div class="board__scroll" id="board-scroll">
             <div class="line" id="line"></div>
           </div>

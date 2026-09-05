@@ -239,7 +239,11 @@ function renderLine() {
   const line = el('line');
   line.innerHTML = '';
   el('board-empty').hidden = view.line.length > 0;
+
+  el('ends').hidden = !view.ends;
   if (!view.ends) return;
+  el('end-left').textContent = view.ends.left;
+  el('end-right').textContent = view.ends.right;
 
   const left = document.createElement('span');
   left.className = 'end-marker';
