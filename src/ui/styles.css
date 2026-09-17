@@ -52,6 +52,83 @@ body {
   justify-content: center;
 }
 
+/* -------------------------------------------------------------- landing */
+
+.landing {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.15rem;
+  text-align: center;
+  max-width: 34rem;
+  padding: 1rem;
+}
+
+.mark {
+  width: min(11rem, 44vw);
+  height: auto;
+  filter: drop-shadow(0 8px 18px rgb(0 0 0 / 0.55));
+}
+
+.wordmark {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  line-height: 1;
+}
+
+.wordmark__over {
+  font-size: clamp(0.72rem, 2.4vw, 0.95rem);
+  letter-spacing: 0.42em;
+  text-transform: uppercase;
+  color: var(--muted);
+  /* Tracking adds space after the last letter; nudge back to stay centred. */
+  padding-left: 0.42em;
+}
+
+.wordmark__main {
+  font-size: clamp(2.2rem, 11vw, 3.9rem);
+  font-weight: 700;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  padding-left: 0.11em;
+  background: linear-gradient(175deg, #f6f3e9 25%, #9fb3a6);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.landing__sub {
+  margin: 0;
+  color: var(--muted);
+  max-width: 26rem;
+  line-height: 1.75;
+  font-size: 0.92rem;
+}
+
+.primary {
+  background: #1f3a2b;
+  border-color: var(--us);
+  color: var(--fg);
+  padding: 0.7rem 2.1rem;
+  font-size: 1rem;
+  font-weight: 600;
+  border-radius: 8px;
+}
+
+.primary:hover {
+  background: #26482f;
+  border-color: var(--us);
+}
+
+.field em {
+  font-style: normal;
+  text-transform: none;
+  letter-spacing: normal;
+  opacity: 0.75;
+}
+
 /* ---------------------------------------------------------- lobby cards */
 
 .card {

@@ -238,6 +238,41 @@ test('only the host can rearrange, and only before the game starts', async () =>
   assert.ok(tooLate.error, 'refused once play has begun');
 });
 
+test('a name is optional, and falls back to the seat number', async () => {
+  const host = await post('/api/rooms', {});
+  const guest = await post(`/api/rooms/${host.code}/join`, { name: '   ' });
+
+  const view = await firstEvent(`/api/rooms/${host.code}/stream?token=${host.token}`);
+  assert.equal(view.players[host.seat].name, 'Player 1');
+  assert.equal(view.players[guest.seat].name, `Player ${guest.seat + 1}`);
+});
+
+test('a player can set and change their name at any point', async () => {
+  const host = await post('/api/rooms', {});
+
+  await post(`/api/rooms/${host.code}/name`, { token: host.token, name: 'Freeman' });
+  let view = await firstEvent(`/api/rooms/${host.code}/stream?token=${host.token}`);
+  assert.equal(view.players[0].name, 'Freeman');
+
+  await post(`/api/rooms/${host.code}/name`, { token: host.token, name: '  Ada  ' });
+  view = await firstEvent(`/api/rooms/${host.code}/stream?token=${host.token}`);
+  assert.equal(view.players[0].name, 'Ada', 'trimmed');
+
+  // Clearing it returns to the fallback rather than leaving a blank at the table.
+  await post(`/api/rooms/${host.code}/name`, { token: host.token, name: '' });
+  view = await firstEvent(`/api/rooms/${host.code}/stream?token=${host.token}`);
+  assert.equal(view.players[0].name, 'Player 1');
+});
+
+test('a name cannot be set by someone not at the table', async () => {
+  const host = await post('/api/rooms', {});
+  const result = await post(`/api/rooms/${host.code}/name`, {
+    token: 'not-a-real-token',
+    name: 'Impostor',
+  });
+  assert.ok(result.error);
+});
+
 test('joining a code that does not exist is refused', async () => {
   const result = await post('/api/rooms/ZZZZ/join', { name: 'Nobody' });
   assert.ok(result.error);

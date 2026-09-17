@@ -118,7 +118,7 @@ function tileNode(first, second, orientation) {
 // ------------------------------------------------------------------ screens
 
 function show(screen) {
-  for (const id of ['screen-lobby', 'screen-wait', 'screen-table']) {
+  for (const id of ['screen-landing', 'screen-invite', 'screen-wait', 'screen-table']) {
     el(id).hidden = id !== screen;
   }
 }
@@ -144,6 +144,15 @@ function renderWaitingRoom() {
   const url = inviteUrl();
   el('invite-url').textContent = url;
   renderInviteCode(url);
+
+  // Reflect the server's idea of the name, but never yank the field out from
+  // under someone mid-edit.
+  const nameField = el('table-name');
+  const mine = view.players[view.seat];
+  if (document.activeElement !== nameField && mine) {
+    nameField.value = mine.name;
+    nameField.placeholder = `Player ${view.seat + 1}`;
+  }
 
   const host = view.seat === view.hostSeat;
 
@@ -638,68 +647,48 @@ function leaveTable() {
   show('screen-lobby');
 }
 
-// -------------------------------------------------------------------- lobby
+// ------------------------------------------------------------------ routing
 
-function flash(message, target = 'lobby-error') {
+function flash(message, target = 'landing-error') {
   const node = el(target);
   node.textContent = message;
   node.hidden = false;
   setTimeout(() => {
     node.hidden = true;
-  }, 4000);
+  }, 5000);
 }
 
-/** The typed name, or null when they have not given one. */
-function playerName() {
-  return el('name').value.trim() || null;
+/** Put the table's code in the address bar, so a refresh returns to it. */
+function goToTable(code) {
+  history.replaceState(null, '', `${location.pathname}?table=${code}`);
 }
 
-function requireName() {
-  const name = playerName();
-  if (!name) {
-    flash('Tell us your name first — the others need to know who they are playing.');
-    el('name').focus();
-  }
-  return name;
-}
-
-async function openTable({ solo }) {
-  const name = requireName();
-  if (!name) return;
-
-  const result = await api('/api/rooms', { name });
+async function createTable() {
+  const result = await api('/api/rooms', {});
   if (result.error) return flash(result.error);
 
   saveSession({ code: result.code, token: result.token, seat: result.seat });
+  goToTable(result.code);
   connect();
-
-  if (solo) {
-    const started = await api(`/api/rooms/${result.code}/start`, { token: result.token });
-    if (started.error) flash(started.error);
-  }
 }
 
-async function joinTable(code) {
-  const name = requireName();
-  if (!name) return;
-
+async function takeSeat(code) {
+  // The name is optional here; the server falls back to the seat number, and it
+  // can be changed on the table page afterwards.
+  const name = el('invite-name').value.trim();
   const result = await api(`/api/rooms/${code.toUpperCase()}/join`, { name });
 
   if (result.error) {
-    // The invited table is gone, full, or already playing. Only now is opening
-    // their own table useful to them, so offer it.
-    if (inviteCode) {
-      dropInviteMode();
-      flash(`${result.error} You can open a table of your own instead.`);
-    } else {
-      flash(result.error);
-    }
+    flash(`${result.error} Start a table of your own instead.`, 'invite-error');
+    setTimeout(() => {
+      history.replaceState(null, '', location.pathname);
+      show('screen-landing');
+    }, 2500);
     return;
   }
 
   saveSession({ code: result.code, token: result.token, seat: result.seat });
-  // Drop the code from the address bar; the session now carries it.
-  history.replaceState(null, '', location.pathname);
+  goToTable(result.code);
   connect();
 }
 
@@ -712,24 +701,44 @@ async function swapSeats(from, to) {
   if (result.error) flash(result.error, 'wait-error');
 }
 
+let renameTimer = null;
+
+/** Push a new name after a pause, rather than on every keystroke. */
+function scheduleRename(value) {
+  clearTimeout(renameTimer);
+  renameTimer = setTimeout(async () => {
+    const result = await api(`/api/rooms/${session.code}/name`, {
+      token: session.token,
+      name: value,
+    });
+    if (result.error) flash(result.error, 'wait-error');
+  }, 400);
+}
+
+function showInvite(code) {
+  inviteCode = code;
+  el('invited-code').textContent = code;
+  show('screen-invite');
+  el('invite-name').focus();
+}
+
 // --------------------------------------------------------------------- boot
 
-el('btn-solo').addEventListener('click', () => openTable({ solo: true }));
-el('btn-create').addEventListener('click', () => openTable({ solo: false }));
+el('btn-create-table').addEventListener('click', createTable);
 
-el('join-form').addEventListener('submit', (event) => {
-  event.preventDefault();
-  const code = el('join-code').value.trim();
-  if (code.length === 4) joinTable(code);
-  else flash('A table code is four characters.');
+el('btn-take-seat').addEventListener('click', () => {
+  if (inviteCode) takeSeat(inviteCode);
 });
 
-// With the code field hidden, the name box is the only thing to type into, so
-// Enter there should do the obvious thing.
-el('name').addEventListener('keydown', (event) => {
-  if (event.key !== 'Enter' || !inviteCode) return;
-  event.preventDefault();
-  joinTable(inviteCode);
+el('invite-name').addEventListener('keydown', (event) => {
+  if (event.key === 'Enter' && inviteCode) {
+    event.preventDefault();
+    takeSeat(inviteCode);
+  }
+});
+
+el('table-name').addEventListener('input', (event) => {
+  scheduleRename(event.target.value);
 });
 
 el('btn-start').addEventListener('click', async () => {
@@ -755,7 +764,7 @@ el('btn-proceed').addEventListener('click', async () => {
     token: session.token,
   });
   el('btn-proceed').disabled = false;
-  if (result.error) flash(result.error);
+  if (result.error) flash(result.error, 'wait-error');
 });
 
 el('overlay-button').addEventListener('click', onOverlayButton);
@@ -776,55 +785,32 @@ for (const end of ['left', 'right']) {
   });
 }
 
-/**
- * Someone arriving from an invite link wants one thing: to get into that table.
- * Offering to open a table of their own instead is just a way for them to end
- * up sitting somewhere their friends are not.
- */
-function applyInviteMode(code) {
-  inviteCode = code;
-  el('join-code').value = code;
-  el('invited-code').textContent = code;
-  el('invited-banner').hidden = false;
-  el('lobby-blurb').textContent =
-    'The 2v2 block game of Spain and Latin America. Give a name and take a seat.';
-  el('lobby-open').hidden = true;
-  el('lobby-divider').hidden = true;
-  el('join-code').hidden = true;
-  el('btn-join').textContent = 'Take a seat';
-}
-
-/** Fall back to the full lobby when the invited table cannot be joined. */
-function dropInviteMode() {
-  inviteCode = null;
-  el('invited-banner').hidden = true;
-  el('lobby-open').hidden = false;
-  el('lobby-divider').hidden = false;
-  el('join-code').hidden = false;
-  el('btn-join').textContent = 'Join';
-}
-
-const invited = new URLSearchParams(location.search)
-  .get('code')
-  ?.toUpperCase()
-  .slice(0, 4);
-
+// Where we are is decided by the address, not by what happens to be in storage.
+//
+//   /?table=CODE   a table you are seated at — rejoin it
+//   /?code=CODE    an invite — take a seat
+//   /              always the front door: start a new table
+const params = new URLSearchParams(location.search);
+const clean = (value) => value?.toUpperCase().slice(0, 4) ?? null;
+const atTable = clean(params.get('table'));
+const invitedTo = clean(params.get('code'));
 const saved = loadSession();
 
-if (invited && saved?.code && saved.code !== invited) {
-  // They followed a link to a different table than the one this browser was
-  // last at. The link is the more recent intent.
-  clearSession();
-}
-
-if (saved?.code && saved?.token && (!invited || saved.code === invited)) {
-  // Rejoin whatever table this browser was already sitting at.
+if (atTable && saved?.token && saved.code === atTable) {
   session = saved;
   connect();
-} else if (invited) {
-  applyInviteMode(invited);
-  show('screen-lobby');
-  el('name').focus();
+} else if (atTable) {
+  // A table link without a seat here — offer to take one.
+  showInvite(atTable);
+} else if (invitedTo) {
+  if (saved?.code === invitedTo && saved?.token) {
+    session = saved;
+    goToTable(invitedTo);
+    connect();
+  } else {
+    showInvite(invitedTo);
+  }
 } else {
-  show('screen-lobby');
+  // Bare root always offers a new table, whatever this browser did last.
+  show('screen-landing');
 }

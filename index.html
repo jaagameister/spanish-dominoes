@@ -7,44 +7,83 @@
     <link rel="stylesheet" href="src/ui/styles.css" />
   </head>
   <body>
-    <!-- ------------------------------------------------------------ lobby -->
-    <section class="screen screen--centred" id="screen-lobby">
-      <div class="card card--lobby">
-        <h1 class="brand">Partner Dominoes</h1>
-        <p class="brand__sub" id="lobby-blurb">
-          The 2v2 block game of Spain and Latin America. Double-six, all
-          twenty-eight tiles dealt, play or pass, first team to 100.
+    <!-- ---------------------------------------------------------- landing -->
+    <section class="screen screen--centred" id="screen-landing">
+      <div class="landing">
+        <svg
+          class="mark"
+          viewBox="0 0 168 94"
+          xmlns="http://www.w3.org/2000/svg"
+          role="img"
+          aria-label="Three domino tiles"
+        >
+          <g stroke="var(--bone-edge)" stroke-width="1">
+            <g transform="translate(8 16) rotate(-10 18 33)">
+              <rect width="36" height="66" rx="5" fill="var(--bone)" />
+              <line x1="1" y1="33" x2="35" y2="33" />
+              <g fill="var(--pip)" stroke="none">
+                <circle cx="10" cy="9" r="2.6" /><circle cx="26" cy="9" r="2.6" />
+                <circle cx="10" cy="17" r="2.6" /><circle cx="26" cy="17" r="2.6" />
+                <circle cx="10" cy="25" r="2.6" /><circle cx="26" cy="25" r="2.6" />
+                <circle cx="10" cy="42" r="2.6" /><circle cx="26" cy="42" r="2.6" />
+                <circle cx="10" cy="50" r="2.6" /><circle cx="26" cy="50" r="2.6" />
+                <circle cx="10" cy="58" r="2.6" /><circle cx="26" cy="58" r="2.6" />
+              </g>
+            </g>
+
+            <g transform="translate(66 12)">
+              <rect width="36" height="66" rx="5" fill="var(--bone)" />
+              <line x1="1" y1="33" x2="35" y2="33" />
+              <g fill="var(--pip)" stroke="none">
+                <circle cx="10" cy="9" r="2.6" /><circle cx="26" cy="9" r="2.6" />
+                <circle cx="18" cy="17" r="2.6" />
+                <circle cx="10" cy="25" r="2.6" /><circle cx="26" cy="25" r="2.6" />
+                <circle cx="10" cy="42" r="2.6" />
+                <circle cx="18" cy="50" r="2.6" />
+                <circle cx="26" cy="58" r="2.6" />
+              </g>
+            </g>
+
+            <g transform="translate(124 16) rotate(10 18 33)">
+              <rect width="36" height="66" rx="5" fill="var(--bone)" />
+              <line x1="1" y1="33" x2="35" y2="33" />
+              <g fill="var(--pip)" stroke="none">
+                <circle cx="10" cy="42" r="2.6" /><circle cx="26" cy="42" r="2.6" />
+                <circle cx="10" cy="58" r="2.6" /><circle cx="26" cy="58" r="2.6" />
+              </g>
+            </g>
+          </g>
+        </svg>
+
+        <h1 class="wordmark">
+          <span class="wordmark__over">Spanish Partner</span>
+          <span class="wordmark__main">Dominoes</span>
+        </h1>
+
+        <p class="landing__sub">
+          Two against two. Twenty-eight tiles, every one of them dealt.
+          Play or pass, and first team to a hundred takes it.
         </p>
 
-        <p class="invited" id="invited-banner" hidden>
-          You have been invited to table <strong id="invited-code"></strong>
-        </p>
+        <button type="button" class="primary" id="btn-create-table">Create Table</button>
+        <p class="error" id="landing-error" hidden></p>
+      </div>
+    </section>
+
+    <!-- ----------------------------------------------------------- invite -->
+    <section class="screen screen--centred" id="screen-invite" hidden>
+      <div class="card">
+        <h2>You have been invited</h2>
+        <p class="muted">to join table</p>
+        <div class="code" id="invited-code">····</div>
 
         <label class="field">
-          <span>Your name</span>
-          <input id="name" type="text" maxlength="16" placeholder="Freeman" autocomplete="nickname" />
+          <span>Your name <em>(optional)</em></span>
+          <input id="invite-name" type="text" maxlength="16" placeholder="Leave blank if you like" autocomplete="nickname" />
         </label>
 
-        <div class="stack" id="lobby-open">
-          <button type="button" id="btn-solo">Play on your own</button>
-          <button type="button" class="ghost" id="btn-create">Open a table for friends</button>
-        </div>
-
-        <div class="divider" id="lobby-divider"><span>or join one</span></div>
-
-        <form class="join" id="join-form">
-          <input
-            id="join-code"
-            type="text"
-            maxlength="4"
-            placeholder="CODE"
-            autocomplete="off"
-            spellcheck="false"
-          />
-          <button type="submit" id="btn-join">Join</button>
-        </form>
-
-        <p class="error" id="lobby-error" hidden></p>
+        <button type="button" class="primary" id="btn-take-seat">Take a seat</button>
+        <p class="error" id="invite-error" hidden></p>
       </div>
     </section>
 
@@ -65,6 +104,17 @@
 
         <button type="button" class="ghost copy" id="btn-copy">Copy the invite link</button>
         <p class="muted small" id="invite-url"></p>
+
+        <label class="field">
+          <span>Your name <em>(optional)</em></span>
+          <input
+            id="table-name"
+            type="text"
+            maxlength="16"
+            placeholder="Player 1"
+            autocomplete="nickname"
+          />
+        </label>
 
         <ul class="roster" id="roster"></ul>
 

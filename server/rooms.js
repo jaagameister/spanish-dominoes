@@ -87,11 +87,23 @@ export function getRoom(code) {
   return rooms.get(String(code || '').toUpperCase());
 }
 
+/**
+ * Names are optional. Whatever arrives is trimmed and capped; anything that
+ * leaves nothing behind falls back to the seat number, so no one ever shows up
+ * at the table as a blank space.
+ */
+function cleanName(name, seat) {
+  const trimmed = String(name ?? '')
+    .trim()
+    .slice(0, 16);
+  return trimmed || `Player ${seat + 1}`;
+}
+
 function seatPlayer(room, seat, name) {
   const token = randomUUID();
   room.seats[seat] = {
     kind: 'human',
-    name: name || `Player ${seat + 1}`,
+    name: cleanName(name, seat),
     token,
     connected: false,
     difficulty: 1,
@@ -151,6 +163,16 @@ export function startGame(room, seat) {
   room.game = createGame({ targetScore: DEFAULT_TARGET });
   room.status = 'playing';
   dealHand(room);
+  return { ok: true };
+}
+
+/** A player's display name is theirs to change, at any point. */
+export function rename(room, seat, name) {
+  const player = room.seats[seat];
+  if (!player || player.kind !== 'human') return { error: 'No seat to rename.' };
+
+  player.name = cleanName(name, seat);
+  broadcast(room);
   return { ok: true };
 }
 
