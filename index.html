@@ -11,9 +11,13 @@
     <section class="screen screen--centred" id="screen-lobby">
       <div class="card card--lobby">
         <h1 class="brand">Partner Dominoes</h1>
-        <p class="brand__sub">
+        <p class="brand__sub" id="lobby-blurb">
           The 2v2 block game of Spain and Latin America. Double-six, all
           twenty-eight tiles dealt, play or pass, first team to 100.
+        </p>
+
+        <p class="invited" id="invited-banner" hidden>
+          You have been invited to table <strong id="invited-code"></strong>
         </p>
 
         <label class="field">
@@ -21,12 +25,12 @@
           <input id="name" type="text" maxlength="16" placeholder="Freeman" autocomplete="nickname" />
         </label>
 
-        <div class="stack">
+        <div class="stack" id="lobby-open">
           <button type="button" id="btn-solo">Play on your own</button>
           <button type="button" class="ghost" id="btn-create">Open a table for friends</button>
         </div>
 
-        <div class="divider"><span>or join one</span></div>
+        <div class="divider" id="lobby-divider"><span>or join one</span></div>
 
         <form class="join" id="join-form">
           <input
@@ -37,7 +41,7 @@
             autocomplete="off"
             spellcheck="false"
           />
-          <button type="submit">Join</button>
+          <button type="submit" id="btn-join">Join</button>
         </form>
 
         <p class="error" id="lobby-error" hidden></p>

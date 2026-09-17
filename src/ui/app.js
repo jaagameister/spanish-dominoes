@@ -33,6 +33,7 @@ let view = null;
 let selected = null; // tile id waiting on a choice of end
 let stream = null;
 let overlayDismissed = false;
+let inviteCode = null; // set when arriving from an invite link
 
 // ------------------------------------------------------------------- state
 
@@ -683,9 +684,22 @@ async function joinTable(code) {
   if (!name) return;
 
   const result = await api(`/api/rooms/${code.toUpperCase()}/join`, { name });
-  if (result.error) return flash(result.error);
+
+  if (result.error) {
+    // The invited table is gone, full, or already playing. Only now is opening
+    // their own table useful to them, so offer it.
+    if (inviteCode) {
+      dropInviteMode();
+      flash(`${result.error} You can open a table of your own instead.`);
+    } else {
+      flash(result.error);
+    }
+    return;
+  }
 
   saveSession({ code: result.code, token: result.token, seat: result.seat });
+  // Drop the code from the address bar; the session now carries it.
+  history.replaceState(null, '', location.pathname);
   connect();
 }
 
@@ -708,6 +722,14 @@ el('join-form').addEventListener('submit', (event) => {
   const code = el('join-code').value.trim();
   if (code.length === 4) joinTable(code);
   else flash('A table code is four characters.');
+});
+
+// With the code field hidden, the name box is the only thing to type into, so
+// Enter there should do the obvious thing.
+el('name').addEventListener('keydown', (event) => {
+  if (event.key !== 'Enter' || !inviteCode) return;
+  event.preventDefault();
+  joinTable(inviteCode);
 });
 
 el('btn-start').addEventListener('click', async () => {
@@ -754,15 +776,55 @@ for (const end of ['left', 'right']) {
   });
 }
 
-// An invite link carries the code; drop it into the join box.
-const invited = new URLSearchParams(location.search).get('code');
-if (invited) el('join-code').value = invited.toUpperCase().slice(0, 4);
+/**
+ * Someone arriving from an invite link wants one thing: to get into that table.
+ * Offering to open a table of their own instead is just a way for them to end
+ * up sitting somewhere their friends are not.
+ */
+function applyInviteMode(code) {
+  inviteCode = code;
+  el('join-code').value = code;
+  el('invited-code').textContent = code;
+  el('invited-banner').hidden = false;
+  el('lobby-blurb').textContent =
+    'The 2v2 block game of Spain and Latin America. Give a name and take a seat.';
+  el('lobby-open').hidden = true;
+  el('lobby-divider').hidden = true;
+  el('join-code').hidden = true;
+  el('btn-join').textContent = 'Take a seat';
+}
 
-// Rejoin whatever table this browser was last sitting at.
+/** Fall back to the full lobby when the invited table cannot be joined. */
+function dropInviteMode() {
+  inviteCode = null;
+  el('invited-banner').hidden = true;
+  el('lobby-open').hidden = false;
+  el('lobby-divider').hidden = false;
+  el('join-code').hidden = false;
+  el('btn-join').textContent = 'Join';
+}
+
+const invited = new URLSearchParams(location.search)
+  .get('code')
+  ?.toUpperCase()
+  .slice(0, 4);
+
 const saved = loadSession();
-if (saved?.code && saved?.token) {
+
+if (invited && saved?.code && saved.code !== invited) {
+  // They followed a link to a different table than the one this browser was
+  // last at. The link is the more recent intent.
+  clearSession();
+}
+
+if (saved?.code && saved?.token && (!invited || saved.code === invited)) {
+  // Rejoin whatever table this browser was already sitting at.
   session = saved;
   connect();
+} else if (invited) {
+  applyInviteMode(invited);
+  show('screen-lobby');
+  el('name').focus();
 } else {
   show('screen-lobby');
 }
