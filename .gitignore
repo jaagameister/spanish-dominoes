@@ -1,0 +1,10 @@
+# Notes about remote infrastructure — hosts, accounts, deploy targets.
+# Not secret in themselves, but not worth publishing either.
+server.md
+
+# The project has no dependencies; this only ever appears from a temporary
+# install (the QR fixtures were generated that way).
+node_modules/
+package-lock.json
+
+.DS_Store
