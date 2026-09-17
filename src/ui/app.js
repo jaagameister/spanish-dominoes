@@ -88,6 +88,19 @@ function positions() {
   };
 }
 
+/**
+ * Where a seat sits on *this* viewer's screen. Colours follow the compass
+ * point, not the person, so south always means you — at every table, in every
+ * seat.
+ */
+function positionOf(seat) {
+  const me = view.seat;
+  if (seat === me) return 'south';
+  if (seat === (me + 1) % 4) return 'west';
+  if (seat === (me + 2) % 4) return 'north';
+  return 'east';
+}
+
 function nameOf(seat) {
   const player = view.players[seat];
   if (!player) return `Seat ${seat}`;
@@ -164,7 +177,11 @@ function renderWaitingRoom() {
     item.className = filled ? 'roster__seat roster__seat--taken' : 'roster__seat';
 
     const who = document.createElement('span');
-    who.className = 'roster__who';
+    // Colour the name by where that seat will appear on this viewer's screen,
+    // so the mapping is already familiar by the time play starts.
+    who.className = filled
+      ? `roster__who roster__who--${positionOf(seat)}`
+      : 'roster__who';
     who.textContent = filled ? nameOf(seat) : 'Empty — a bot will sit here';
 
     const tag = document.createElement('span');
@@ -311,6 +328,14 @@ function renderSeats() {
   }
 }
 
+/** The most recent tile actually laid down; passes in between do not count. */
+function lastPlay() {
+  for (let i = view.log.length - 1; i >= 0; i--) {
+    if (view.log[i].type === 'play') return view.log[i];
+  }
+  return null;
+}
+
 function renderLine() {
   const line = el('line');
   line.innerHTML = '';
@@ -326,9 +351,18 @@ function renderLine() {
   left.textContent = `end ${view.ends.left}`;
   line.appendChild(left);
 
+  // Only the most recent play is ringed, in its player's colour. Rebuilding the
+  // line each render is what keeps it to one: the previous turn's ring is gone
+  // because that tile is drawn fresh without the class.
+  const latest = lastPlay();
+
   for (const placed of view.line) {
     // Doubles are laid crosswise, as on a real table.
-    line.appendChild(tileNode(placed.a, placed.b, placed.double ? 'v' : 'h'));
+    const tile = tileNode(placed.a, placed.b, placed.double ? 'v' : 'h');
+    if (latest && placed.id === latest.tileId) {
+      tile.classList.add('tile--last', `tile--by-${positionOf(latest.seat)}`);
+    }
+    line.appendChild(tile);
   }
 
   const right = document.createElement('span');

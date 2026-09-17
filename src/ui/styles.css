@@ -13,12 +13,21 @@
   --us: #4ade80;
   --them: #fbbf24;
 
+  /* Seat colours are positions on screen, not people: south is always whoever
+     is looking, so the same colour always means "you". */
+  --north: #60a5fa;
+  --south: #f87171;
+  --east: #4ade80;
+  --west: #fbbf24;
+
   --bone: #f2efe4;
   --bone-edge: #cfcabb;
   --bone-dead: #8f9a92;
   --pip: #1b1f1d;
 
-  --playable: #4ade80;
+  /* Your own colour, so a lit tile in hand reads as "mine to play" rather than
+     borrowing the green that now means the player to the east. */
+  --playable: var(--south);
   --radius: 8px;
 }
 
@@ -341,6 +350,19 @@ input[type='text']:focus {
   background: #131f19;
 }
 
+.roster__who--north {
+  color: var(--north);
+}
+.roster__who--south {
+  color: var(--south);
+}
+.roster__who--east {
+  color: var(--east);
+}
+.roster__who--west {
+  color: var(--west);
+}
+
 .roster__tag {
   font-size: 0.68rem;
   text-transform: uppercase;
@@ -471,13 +493,19 @@ input[type='text']:focus {
   transition: border-color 0.2s, box-shadow 0.2s;
 }
 
-.seat--active {
-  border-color: var(--us);
-  box-shadow: 0 0 0 1px var(--us), 0 0 18px -6px var(--us);
+.seat--north {
+  --seat-colour: var(--north);
+}
+.seat--west {
+  --seat-colour: var(--west);
+}
+.seat--east {
+  --seat-colour: var(--east);
 }
 
-.seat--partner .seat__name {
-  color: var(--us);
+.seat--active {
+  border-color: var(--seat-colour);
+  box-shadow: 0 0 0 1px var(--seat-colour), 0 0 18px -6px var(--seat-colour);
 }
 
 .seat__name {
@@ -485,7 +513,7 @@ input[type='text']:focus {
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--them);
+  color: var(--seat-colour);
 }
 
 .seat__count {
@@ -606,6 +634,29 @@ input[type='text']:focus {
   font-variant-numeric: tabular-nums;
 }
 
+/**
+ * The tile just played, ringed in the colour of whoever played it. Only ever
+ * one at a time — the ring moves with play rather than accumulating.
+ */
+.line .tile--last {
+  outline: 2px solid var(--played-colour, var(--muted));
+  outline-offset: 2px;
+  border-radius: 5px;
+}
+
+.tile--by-north {
+  --played-colour: var(--north);
+}
+.tile--by-south {
+  --played-colour: var(--south);
+}
+.tile--by-east {
+  --played-colour: var(--east);
+}
+.tile--by-west {
+  --played-colour: var(--west);
+}
+
 .end-marker {
   align-self: center;
   font-size: 0.65rem;
@@ -680,6 +731,12 @@ input[type='text']:focus {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--muted);
+}
+
+/* You sit south, always. */
+.you__name {
+  color: var(--south);
+  font-weight: 600;
 }
 
 .hand {
