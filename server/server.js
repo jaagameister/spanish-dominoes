@@ -26,7 +26,9 @@ import {
 import { viewFor } from './protocol.js';
 import { setPort } from './address.js';
 
-const PORT = Number(process.env.PORT) || 8000;
+// Not `Number(env.PORT) || 8000`: port 0 is meaningful — it asks the OS for a
+// free one — and it is also falsy, so that idiom quietly turns it into 8000.
+const PORT = process.env.PORT === undefined ? 8000 : Number(process.env.PORT);
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 
 const CONTENT_TYPES = {
@@ -192,9 +194,7 @@ export function start(port = PORT) {
 
 export { server };
 
-// Only self-start when run directly, so tests can import this module.
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
-  start().then((s) => {
-    console.log(`Partner Dominoes on http://localhost:${s.address().port}`);
-  });
-}
+// Nothing here starts itself: server/main.js is the entry point. Guarding a
+// self-start on process.argv[1] looked equivalent and was not — under a
+// launcher that imports rather than executes (pm2 fork mode), the comparison
+// quietly fails and the process serves nothing while reporting itself healthy.
