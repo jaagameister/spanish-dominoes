@@ -91,7 +91,7 @@ function authenticate(code, token) {
   return { room, seat };
 }
 
-function openStream(req, res, room, seat) {
+function openStream(req, res, room, token) {
   res.writeHead(200, {
     'Content-Type': 'text/event-stream; charset=utf-8',
     'Cache-Control': 'no-cache, no-transform',
@@ -104,7 +104,7 @@ function openStream(req, res, room, seat) {
   // response. End the stream instead — a client that hangs on a half-open
   // connection is far worse to debug than one that sees it close.
   try {
-    const unsubscribe = subscribe(room, seat, res);
+    const unsubscribe = subscribe(room, token, res);
     req.on('close', unsubscribe);
   } catch (error) {
     res.write(`event: error\ndata: ${JSON.stringify({ error: error.message })}\n\n`);
@@ -148,8 +148,7 @@ const server = createServer(async (req, res) => {
     if (action === 'stream' && req.method === 'GET') {
       const room = getRoom(code);
       if (!room) return json(res, 404, { error: 'No table with that code.' });
-      const seat = seatOf(room, url.searchParams.get('token'));
-      return openStream(req, res, room, seat);
+      return openStream(req, res, room, url.searchParams.get('token'));
     }
 
     if (req.method !== 'POST') return json(res, 405, { error: 'Method not allowed' });

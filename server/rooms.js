@@ -329,23 +329,29 @@ export function ready(room, seat) {
 
 // --------------------------------------------------------------- streaming
 
-export function subscribe(room, seat, res) {
-  const subscriber = { seat, res };
+function setConnected(room, token, connected) {
+  const seat = seatOf(room, token);
+  if (seat >= 0) room.seats[seat].connected = connected;
+}
+
+/**
+ * A subscriber is identified by its token, never by a seat number. Seats move —
+ * the host can rearrange the table — and a cached seat would go stale the
+ * moment they did, which means sending a player the hand of whoever now sits
+ * where they used to.
+ */
+export function subscribe(room, token, res) {
+  const subscriber = { token, res };
   room.subscribers.add(subscriber);
 
-  if (seat >= 0 && room.seats[seat].kind === 'human') {
-    room.seats[seat].connected = true;
-  }
-
-  send(subscriber, viewFor(room, seat));
+  setConnected(room, token, true);
+  send(subscriber, viewFor(room, seatOf(room, token)));
   broadcast(room);
 
   return () => {
     room.subscribers.delete(subscriber);
-    if (seat >= 0 && room.seats[seat].kind === 'human') {
-      const stillHere = [...room.subscribers].some((s) => s.seat === seat);
-      room.seats[seat].connected = stillHere;
-    }
+    const stillHere = [...room.subscribers].some((s) => s.token === token);
+    setConnected(room, token, stillHere);
     broadcast(room);
   };
 }
@@ -360,7 +366,7 @@ function send(subscriber, view) {
 
 export function broadcast(room) {
   for (const subscriber of room.subscribers) {
-    send(subscriber, viewFor(room, subscriber.seat));
+    send(subscriber, viewFor(room, seatOf(room, subscriber.token)));
   }
 }
 

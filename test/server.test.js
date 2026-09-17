@@ -174,6 +174,50 @@ test('the host can rearrange the seating, and hosting follows them', async () =>
   assert.notEqual(1 % 2, guest.seat % 2);
 });
 
+test('an open stream follows its player when the seating changes', async () => {
+  // Regression: subscribers used to cache their seat number at connect time, so
+  // after a swap a player kept being rendered — and dealt — as their old seat.
+  const host = await post('/api/rooms', { name: 'Freeman' });
+  const guest = await post(`/api/rooms/${host.code}/join`, { name: 'Ada' });
+
+  const stream = openStream(`/api/rooms/${host.code}/stream?token=${host.token}`);
+  const first = await stream.next();
+  assert.equal(first.seat, 0);
+
+  await post(`/api/rooms/${host.code}/arrange`, {
+    token: host.token,
+    from: 0,
+    to: 1,
+  });
+
+  let moved = await stream.next();
+  while (moved.seat === 0) moved = await stream.next();
+
+  assert.equal(moved.seat, 1, 'the live stream reports the new seat');
+  assert.equal(moved.hostSeat, 1, 'and they are still the host');
+
+  // And the hand dealt to that stream is the one for the seat they now hold.
+  await post(`/api/rooms/${host.code}/start`, { token: host.token });
+  let playing = await stream.next();
+  while (playing.phase !== 'playing') playing = await stream.next();
+
+  assert.equal(playing.seat, 1);
+  assert.equal(playing.hand.length, 7);
+
+  const theirs = await firstEvent(
+    `/api/rooms/${host.code}/stream?token=${guest.token}`,
+  );
+  const mine = playing.hand.map((t) => t.id);
+  const others = theirs.hand.map((t) => t.id);
+  assert.equal(
+    mine.filter((id) => others.includes(id)).length,
+    0,
+    'the two players hold different tiles',
+  );
+
+  stream.close();
+});
+
 test('only the host can rearrange, and only before the game starts', async () => {
   const host = await post('/api/rooms', { name: 'Freeman' });
   const guest = await post(`/api/rooms/${host.code}/join`, { name: 'Ada' });
