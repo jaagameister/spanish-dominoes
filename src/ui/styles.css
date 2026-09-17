@@ -41,6 +41,10 @@ body {
 
 .screen {
   min-height: 100vh;
+  /* On a phone, 100vh is the viewport *without* the browser chrome subtracted,
+     so a full-height layout runs off the bottom of what you can actually see.
+     dvh is the visible height, and shrinks as the address bar appears. */
+  min-height: 100dvh;
   padding: 1rem;
   display: flex;
   flex-direction: column;
@@ -1038,7 +1042,8 @@ button:hover {
       "north north"
       "board board"
       "west  east";
-    /* Let the board take what is left rather than forcing a tall minimum. */
+    /* The board takes whatever the seats, status and hand do not. Capping it
+       instead just moves the empty space somewhere else on the screen. */
     grid-template-rows: auto minmax(0, 1fr) auto;
     min-height: 0;
     gap: 0.5rem;
@@ -1048,12 +1053,18 @@ button:hover {
     justify-self: stretch;
   }
 
+  /* The board is scenery; the hand is what you touch. Cap the felt so it stops
+     claiming most of the screen and leave the room to the tiles. */
   .board {
-    min-height: 7rem;
+    min-height: 6rem;
   }
 
   .board__scroll {
     padding: 0.75rem 0.5rem;
+  }
+
+  .line .tile {
+    --half: 20px;
   }
 
   /* The seat panels are reference, not the main event — shrink them. */
@@ -1084,13 +1095,23 @@ button:hover {
     font-size: 1.15rem;
   }
 
-  /* Tiles stay big: they are the tap targets. */
+  /* Tiles are the tap targets, so give them everything that is left. Sized to
+     fit a full hand of seven across the screen rather than wrapping to a second
+     row, which halves them again. */
   .hand {
-    gap: 0.3rem;
+    gap: 0.25rem;
     min-height: 0;
+    flex-wrap: nowrap;
+    justify-content: center;
+    overflow-x: auto;
+    padding-bottom: 0.2rem;
   }
 
   .hand .tile {
-    --half: 30px;
+    --half: clamp(28px, calc((100vw - 3rem) / 7 - 11px), 46px);
+  }
+
+  .you__header {
+    font-size: 0.68rem;
   }
 }
