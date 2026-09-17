@@ -57,6 +57,9 @@ export function viewFor(room, seat) {
     // Where another device should point to reach this table. The host's own
     // browser only knows "localhost", which is no use to anyone else.
     inviteOrigin: lanOrigin(),
+    // Set while the table waits for a player to acknowledge their bot
+    // partner's move.
+    pause: room.pause,
   };
 
   if (!game) {

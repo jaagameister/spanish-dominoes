@@ -67,11 +67,23 @@ Then open <http://localhost:8000/>.
 
 ## Playing with other people
 
-Open a table and you get a four-character code and an invite link. Anyone who
-joins takes the next seat, and **seats alternate between the teams**, so the
-second person to sit down is your opponent and the third is your partner. Any
-seat still empty when you start is filled by a bot, so a table works with one,
-two, three or four people.
+Open a table and you get a four-character code, an invite link, and a QR code to
+point a phone at. Any seat still empty when you start is filled by a bot, so a
+table works with one, two, three or four people.
+
+**People who arrive together are partnered by default.** Seats alternate between
+the teams, so seating each newcomer in the next free chair would make the second
+person at the table an opponent — almost never what anyone wants. The second
+human is seated across from the first instead, and the third and fourth take the
+opposing pair. The host can rearrange anyone with the arrows in the waiting room
+before play begins.
+
+**A player partnered by a bot gets to see what it did.** When your partner is a
+bot, the table holds after each of its moves until you press Proceed — otherwise
+three more moves land on top of it before you have taken it in. Two humans
+playing as partners never see this, because then the bots are partnering each
+other. If the waiting player disappears, the table carries on by itself after
+ninety seconds rather than stranding everyone.
 
 The server listens on every interface, so anyone on the same network can join at
 `http://<your-lan-ip>:8000`. Reaching it from outside your network needs a

@@ -675,6 +675,47 @@ button:hover {
   font-weight: 600;
 }
 
+.status--waiting {
+  color: var(--fg);
+}
+
+#btn-proceed {
+  border-color: var(--us);
+  background: #1c3527;
+  padding: 0.3rem 1.1rem;
+}
+
+.seat__bot {
+  margin-left: 0.4rem;
+  font-size: 0.6rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 0 0.25rem;
+}
+
+.roster__who {
+  flex: 1;
+}
+
+.roster__move {
+  display: flex;
+  gap: 0.2rem;
+}
+
+.tiny {
+  padding: 0.05rem 0.4rem;
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
+.tiny:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
 .status--alert strong {
   color: var(--them);
 }

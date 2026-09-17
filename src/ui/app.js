@@ -144,6 +144,8 @@ function renderWaitingRoom() {
   el('invite-url').textContent = url;
   renderInviteCode(url);
 
+  const host = view.seat === view.hostSeat;
+
   const roster = el('roster');
   roster.innerHTML = '';
   view.players.forEach((player, seat) => {
@@ -152,6 +154,7 @@ function renderWaitingRoom() {
     item.className = filled ? 'roster__seat roster__seat--taken' : 'roster__seat';
 
     const who = document.createElement('span');
+    who.className = 'roster__who';
     who.textContent = filled ? nameOf(seat) : 'Empty — a bot will sit here';
 
     const tag = document.createElement('span');
@@ -160,10 +163,35 @@ function renderWaitingRoom() {
     tag.textContent = seat % 2 === view.seat % 2 ? 'Your team' : 'Other team';
 
     item.append(who, tag);
+
+    // Only the host rearranges, and only seating order matters — swapping with
+    // the seat above or below reaches any arrangement.
+    if (host) {
+      const controls = document.createElement('span');
+      controls.className = 'roster__move';
+      for (const [label, target] of [
+        ['↑', seat - 1],
+        ['↓', seat + 1],
+      ]) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'ghost tiny';
+        button.textContent = label;
+        button.disabled = target < 0 || target > 3;
+        button.title = `Swap with seat ${target + 1}`;
+        button.addEventListener('click', () => swapSeats(seat, target));
+        controls.appendChild(button);
+      }
+      item.appendChild(controls);
+    }
+
     roster.appendChild(item);
   });
 
-  const host = view.seat === view.hostSeat;
+  el('roster-hint').textContent = host
+    ? 'Partners sit across from each other — seats 1 and 3 are one team, 2 and 4 the other. Use the arrows to rearrange. Any seat still empty when you start is filled by a bot.'
+    : 'Any seat still empty when the host starts is filled by a bot.';
+
   el('btn-start').hidden = !host;
   el('btn-start').textContent =
     view.players.filter((p) => p.kind === 'human').length > 1
@@ -229,7 +257,16 @@ function renderSeats() {
 
     const name = document.createElement('div');
     name.className = 'seat__name';
-    name.textContent = seat === (view.seat + 2) % 4 ? `${player.name} — partner` : player.name;
+    name.textContent =
+      seat === (view.seat + 2) % 4 ? `${player.name} — partner` : player.name;
+
+    // Worth knowing at a glance who at the table is a person.
+    if (player.kind === 'bot') {
+      const tag = document.createElement('span');
+      tag.className = 'seat__bot';
+      tag.textContent = 'bot';
+      name.appendChild(tag);
+    }
 
     const count = document.createElement('div');
     count.className = 'seat__count';
@@ -304,6 +341,9 @@ function renderHand() {
   const pips = view.hand.reduce((sum, t) => sum + t.high + t.low, 0);
   el('your-pips').textContent = `${pips} pips`;
 
+  const me = view.players[view.seat];
+  el('your-name').textContent = me ? `${me.name} — your hand` : 'Your hand';
+
   const myTurn = view.turn === view.seat && view.phase === 'playing';
 
   for (const tile of view.hand) {
@@ -324,10 +364,18 @@ function renderHand() {
 
 function renderStatus() {
   const status = el('status');
-  status.innerHTML = '';
-  const text = document.createElement('span');
+  const text = el('status-text');
+  const waitingOnMe = view.pause?.seat === view.seat;
 
-  if (view.phase === 'playing' && view.turn === view.seat) {
+  status.classList.toggle('status--waiting', Boolean(waitingOnMe));
+  el('btn-proceed').hidden = !waitingOnMe;
+
+  if (waitingOnMe) {
+    // The table is held so this player can take in what their partner did.
+    text.innerHTML = `${escape(view.message ?? '')} <strong>Your partner's move.</strong>`;
+  } else if (view.pause) {
+    text.textContent = `${nameOf(view.pause.seat)} is catching up…`;
+  } else if (view.phase === 'playing' && view.turn === view.seat) {
     text.innerHTML =
       view.legalMoves.length === 0
         ? 'Nothing you can play — you must <strong>pass</strong>.'
@@ -335,8 +383,12 @@ function renderStatus() {
   } else {
     text.textContent = view.message ?? '';
   }
+}
 
-  status.appendChild(text);
+function escape(value) {
+  const node = document.createElement('span');
+  node.textContent = value;
+  return node.innerHTML;
 }
 
 function renderEndPicker() {
@@ -596,13 +648,25 @@ function flash(message, target = 'lobby-error') {
   }, 4000);
 }
 
+/** The typed name, or null when they have not given one. */
 function playerName() {
-  const typed = el('name').value.trim();
-  return typed || 'Player';
+  return el('name').value.trim() || null;
+}
+
+function requireName() {
+  const name = playerName();
+  if (!name) {
+    flash('Tell us your name first — the others need to know who they are playing.');
+    el('name').focus();
+  }
+  return name;
 }
 
 async function openTable({ solo }) {
-  const result = await api('/api/rooms', { name: playerName() });
+  const name = requireName();
+  if (!name) return;
+
+  const result = await api('/api/rooms', { name });
   if (result.error) return flash(result.error);
 
   saveSession({ code: result.code, token: result.token, seat: result.seat });
@@ -615,11 +679,23 @@ async function openTable({ solo }) {
 }
 
 async function joinTable(code) {
-  const result = await api(`/api/rooms/${code.toUpperCase()}/join`, { name: playerName() });
+  const name = requireName();
+  if (!name) return;
+
+  const result = await api(`/api/rooms/${code.toUpperCase()}/join`, { name });
   if (result.error) return flash(result.error);
 
   saveSession({ code: result.code, token: result.token, seat: result.seat });
   connect();
+}
+
+async function swapSeats(from, to) {
+  const result = await api(`/api/rooms/${session.code}/arrange`, {
+    token: session.token,
+    from,
+    to,
+  });
+  if (result.error) flash(result.error, 'wait-error');
 }
 
 // --------------------------------------------------------------------- boot
@@ -649,6 +725,15 @@ el('btn-copy').addEventListener('click', async () => {
   } catch {
     flash('Copy failed — the link is written below.', 'wait-error');
   }
+});
+
+el('btn-proceed').addEventListener('click', async () => {
+  el('btn-proceed').disabled = true;
+  const result = await api(`/api/rooms/${session.code}/proceed`, {
+    token: session.token,
+  });
+  el('btn-proceed').disabled = false;
+  if (result.error) flash(result.error);
 });
 
 el('overlay-button').addEventListener('click', onOverlayButton);

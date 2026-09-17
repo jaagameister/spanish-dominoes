@@ -64,7 +64,7 @@
 
         <ul class="roster" id="roster"></ul>
 
-        <p class="muted small">
+        <p class="muted small" id="roster-hint">
           Any seat still empty when you start is filled by a bot, so you can
           begin with however many people you have.
         </p>
@@ -115,11 +115,14 @@
         <div class="seat seat--east" id="seat-east"></div>
       </main>
 
-      <div class="status" id="status"></div>
+      <div class="status" id="status">
+        <span id="status-text"></span>
+        <button type="button" id="btn-proceed" hidden>Proceed</button>
+      </div>
 
       <section class="you">
         <div class="you__header">
-          <span class="you__name">Your hand</span>
+          <span class="you__name" id="your-name">Your hand</span>
           <span class="you__pips" id="your-pips"></span>
         </div>
         <div class="hand" id="hand"></div>

@@ -17,6 +17,8 @@ import {
   startGame,
   act,
   ready,
+  arrange,
+  proceed,
   subscribe,
   heartbeat,
   collectIdleRooms,
@@ -127,7 +129,9 @@ const server = createServer(async (req, res) => {
       return json(res, 200, { code: room.code, token, seat });
     }
 
-    const match = path.match(/^\/api\/rooms\/([A-Za-z0-9]{4})\/(join|start|action|ready|stream)$/);
+    const match = path.match(
+      /^\/api\/rooms\/([A-Za-z0-9]{4})\/(join|start|action|ready|arrange|proceed|stream)$/,
+    );
     if (!match) return json(res, 404, { error: 'Not found' });
 
     const [, code, action] = match;
@@ -160,7 +164,11 @@ const server = createServer(async (req, res) => {
         ? startGame(room, seat)
         : action === 'ready'
           ? ready(room, seat)
-          : act(room, seat, body);
+          : action === 'arrange'
+            ? arrange(room, seat, body.from, body.to)
+            : action === 'proceed'
+              ? proceed(room, seat)
+              : act(room, seat, body);
 
     if (result.error) return json(res, 400, result);
     return json(res, 200, { ok: true, state: viewFor(room, seat) });
