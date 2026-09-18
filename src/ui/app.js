@@ -328,12 +328,23 @@ function renderSeats() {
   }
 }
 
-/** The most recent tile actually laid down; passes in between do not count. */
-function lastPlay() {
-  for (let i = view.log.length - 1; i >= 0; i--) {
-    if (view.log[i].type === 'play') return view.log[i];
+/**
+ * Each player's latest turn, as a map of tile id to their screen position.
+ *
+ * One tile per player, so the table shows at a glance what everyone last did —
+ * usually four rings, one of each colour. A player whose most recent turn was a
+ * pass contributes nothing, which is exactly the information you want: their
+ * ring disappearing is the visible form of "they had nothing".
+ */
+function recentPlays() {
+  const latestTurn = new Map();
+  for (const entry of view.log) latestTurn.set(entry.seat, entry);
+
+  const byTile = new Map();
+  for (const [seat, entry] of latestTurn) {
+    if (entry.type === 'play') byTile.set(entry.tileId, positionOf(seat));
   }
-  return null;
+  return byTile;
 }
 
 function renderLine() {
@@ -351,17 +362,16 @@ function renderLine() {
   left.textContent = `end ${view.ends.left}`;
   line.appendChild(left);
 
-  // Only the most recent play is ringed, in its player's colour. Rebuilding the
-  // line each render is what keeps it to one: the previous turn's ring is gone
-  // because that tile is drawn fresh without the class.
-  const latest = lastPlay();
+  // Ringed in each player's colour: their latest tile, until they play another.
+  // The line is rebuilt every render, so a ring that should have moved on is
+  // simply not drawn again.
+  const recent = recentPlays();
 
   for (const placed of view.line) {
     // Doubles are laid crosswise, as on a real table.
     const tile = tileNode(placed.a, placed.b, placed.double ? 'v' : 'h');
-    if (latest && placed.id === latest.tileId) {
-      tile.classList.add('tile--last', `tile--by-${positionOf(latest.seat)}`);
-    }
+    const position = recent.get(placed.id);
+    if (position) tile.classList.add('tile--recent', `tile--by-${position}`);
     line.appendChild(tile);
   }
 
@@ -407,19 +417,9 @@ function renderHand() {
 }
 
 function renderStatus() {
-  const status = el('status');
   const text = el('status-text');
-  const waitingOnMe = view.pause?.seat === view.seat;
 
-  status.classList.toggle('status--waiting', Boolean(waitingOnMe));
-  el('btn-proceed').hidden = !waitingOnMe;
-
-  if (waitingOnMe) {
-    // The table is held so this player can take in what their partner did.
-    text.innerHTML = `${escape(view.message ?? '')} <strong>Your partner's move.</strong>`;
-  } else if (view.pause) {
-    text.textContent = `${nameOf(view.pause.seat)} is catching up…`;
-  } else if (view.phase === 'playing' && view.turn === view.seat) {
+  if (view.phase === 'playing' && view.turn === view.seat) {
     text.innerHTML =
       view.legalMoves.length === 0
         ? 'Nothing you can play — you must <strong>pass</strong>.'
@@ -790,15 +790,6 @@ el('btn-copy').addEventListener('click', async () => {
   } catch {
     flash('Copy failed — the link is written below.', 'wait-error');
   }
-});
-
-el('btn-proceed').addEventListener('click', async () => {
-  el('btn-proceed').disabled = true;
-  const result = await api(`/api/rooms/${session.code}/proceed`, {
-    token: session.token,
-  });
-  el('btn-proceed').disabled = false;
-  if (result.error) flash(result.error, 'wait-error');
 });
 
 el('overlay-button').addEventListener('click', onOverlayButton);

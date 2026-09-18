@@ -23,12 +23,6 @@ const BOT_PAUSE_MS = 1100;
 const FORCED_PASS_PAUSE_MS = 900;
 /** How long the table lingers on a finished hand before dealing the next. */
 const HAND_REVIEW_MS = 20000;
-/**
- * A player whose partner is a bot gets to see what that partner did before play
- * moves on. If they wander off, the table resumes on its own rather than
- * stranding everyone else.
- */
-const PARTNER_PAUSE_TIMEOUT_MS = 90000;
 /** Rooms with nobody connected are collected after this long. */
 const ROOM_TTL_MS = 60 * 60 * 1000;
 
@@ -75,7 +69,6 @@ export function createRoom(name) {
     message: 'Waiting for players.',
     subscribers: new Set(),
     timer: null,
-    pause: null,
   };
   rooms.set(room.code, room);
 
@@ -203,7 +196,6 @@ export function arrange(room, seat, from, to) {
 function dealHand(room) {
   startHand(room.game);
   room.log = [];
-  room.pause = null;
   const opener = room.seats[room.game.starter].name;
   room.message =
     room.game.handNumber === 1
@@ -220,7 +212,6 @@ function dealHand(room) {
 export function act(room, seat, action) {
   const game = room.game;
   if (!game || game.phase !== 'playing') return { error: 'Not in play.' };
-  if (room.pause) return { error: 'Waiting on a partner to catch up.' };
   if (game.turn !== seat) return { error: 'Not your turn.' };
 
   try {
@@ -256,50 +247,14 @@ function applyPass(room, seat) {
   afterMove(room, result, seat);
 }
 
-/**
- * Hold the table after a bot plays, so the human it is partnering can see what
- * their partner did before the next three moves bury it. Returns whether the
- * table is now waiting.
- */
-function maybePauseForPartner(room, moverSeat) {
-  if (room.seats[moverSeat].kind !== 'bot') return false;
-
-  const partnerSeat = partnerOf(moverSeat);
-  const partner = room.seats[partnerSeat];
-  if (partner.kind !== 'human' || !partner.connected) return false;
-
-  room.pause = { seat: partnerSeat, by: moverSeat };
-  broadcast(room);
-
-  clearTimeout(room.timer);
-  room.timer = later(() => resume(room), PARTNER_PAUSE_TIMEOUT_MS);
-  return true;
-}
-
-function resume(room) {
-  if (!room.pause) return;
-  room.pause = null;
-  broadcast(room);
-  scheduleTurn(room);
-}
-
-/** The waiting player acknowledges their partner's move. */
-export function proceed(room, seat) {
-  if (!room.pause) return { error: 'Nothing to acknowledge.' };
-  if (room.pause.seat !== seat) return { error: 'That is not your table to resume.' };
-  resume(room);
-  return { ok: true };
-}
-
 function afterMove(room, result, moverSeat) {
   broadcast(room);
 
   if (room.game.phase === 'playing') {
-    if (!maybePauseForPartner(room, moverSeat)) scheduleTurn(room);
+    scheduleTurn(room);
     return;
   }
 
-  room.pause = null;
 
   if (room.game.phase === 'gameOver') {
     room.status = 'finished';
@@ -317,7 +272,6 @@ function scheduleTurn(room) {
   clearTimeout(room.timer);
   const game = room.game;
   if (!game || game.phase !== 'playing') return;
-  if (room.pause) return; // held until the waiting player says go
 
   const seat = game.turn;
   const player = room.seats[seat];

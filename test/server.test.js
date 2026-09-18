@@ -373,44 +373,39 @@ test('a player cannot move out of turn', async () => {
   assert.ok(result.error, 'expected the out-of-turn move to be refused');
 });
 
-// ------------------------------------------------------------ partner pause
+// Seating keeps partners together, which is what decides who bots partner.
+test('two humans are seated as partners, leaving the bots to each other', async () => {
+  const host = await post('/api/rooms', { name: 'Freeman' });
+  const guest = await post(`/api/rooms/${host.code}/join`, { name: 'Ada' });
+  assert.equal(host.seat % 2, guest.seat % 2, 'the humans are partners');
 
-test('play halts after a bot partner moves, until the human proceeds', async () => {
+  const view = await firstEvent(`/api/rooms/${host.code}/stream?token=${host.token}`);
+  const bots = view.players.filter((p) => p.kind !== 'human');
+  assert.equal(bots.length, 2);
+});
+
+test('play runs to the end of a hand without waiting on anyone', async () => {
+  // Nothing holds the table any more: a solo player's three bots should carry
+  // the hand to a result on their own.
   const host = await post('/api/rooms', { name: 'Freeman' });
   const stream = openStream(`/api/rooms/${host.code}/stream?token=${host.token}`);
-  await stream.next(); // the lobby, which also marks the host connected
+  await stream.next();
   await post(`/api/rooms/${host.code}/start`, { token: host.token });
 
-  let sawPause = false;
-  let resumed = false;
+  let finished = false;
   const deadline = Date.now() + 25_000;
 
-  while (Date.now() < deadline && !(sawPause && resumed)) {
+  while (Date.now() < deadline && !finished) {
     const view = await Promise.race([
       stream.next(),
-      new Promise((r) => setTimeout(() => r(null), 6000)),
+      new Promise((r) => setTimeout(() => r(null), 8000)),
     ]);
     if (!view) break;
-    if (view.phase !== 'playing') continue;
 
-    if (view.pause) {
-      assert.equal(view.pause.seat, 0, 'the table waits on the human');
-      assert.equal(view.pause.by, 2, 'because their partner moved');
-      sawPause = true;
-
-      // Nothing may happen while the table is held.
-      const blocked = await post(`/api/rooms/${host.code}/action`, {
-        token: host.token,
-        type: 'pass',
-      });
-      assert.ok(blocked.error, 'moves are refused while paused');
-
-      await post(`/api/rooms/${host.code}/proceed`, { token: host.token });
-      continue;
+    if (view.handResult) {
+      finished = true;
+      break;
     }
-
-    if (sawPause) resumed = true;
-
     if (view.turn === 0 && view.legalMoves.length > 0) {
       const move = view.legalMoves[0];
       await post(`/api/rooms/${host.code}/action`, {
@@ -423,26 +418,7 @@ test('play halts after a bot partner moves, until the human proceeds', async () 
   }
 
   stream.close();
-  assert.ok(sawPause, 'the table paused after the bot partner moved');
-  assert.ok(resumed, 'and carried on once acknowledged');
-});
-
-test('two partnered humans never trigger the pause', async () => {
-  // With both people on one team the bots partner each other, so there is
-  // nobody the pause would be for.
-  const host = await post('/api/rooms', { name: 'Freeman' });
-  const guest = await post(`/api/rooms/${host.code}/join`, { name: 'Ada' });
-  assert.equal(host.seat % 2, guest.seat % 2, 'the humans are partners');
-
-  const view = await firstEvent(`/api/rooms/${host.code}/stream?token=${host.token}`);
-  const bots = view.players.filter((p) => p.kind !== 'human');
-  assert.equal(bots.length, 2);
-});
-
-test('proceeding when nothing is paused is refused', async () => {
-  const { host } = await seatedGame();
-  const result = await post(`/api/rooms/${host.code}/proceed`, { token: host.token });
-  assert.ok(result.error);
+  assert.ok(finished, 'the hand reached a result unaided');
 });
 
 test('a player cannot play a tile they do not hold', async () => {
