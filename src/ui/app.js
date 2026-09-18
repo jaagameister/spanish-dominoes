@@ -550,7 +550,7 @@ function renderOverlay() {
   }
 
   const finished = view.phase === 'gameOver';
-  el('overlay-button').textContent = finished ? 'Leave the table' : 'Deal the next hand';
+  el('overlay-button').textContent = finished ? 'Play again' : 'Deal the next hand';
   el('overlay-countdown').textContent = finished
     ? ''
     : 'The next hand deals on its own shortly.';
@@ -558,13 +558,15 @@ function renderOverlay() {
 }
 
 async function onOverlayButton() {
-  if (view.phase === 'gameOver') {
-    leaveTable();
-    return;
-  }
   overlayDismissed = true;
   el('overlay').hidden = true;
-  const result = await api(`/api/rooms/${session.code}/ready`, { token: session.token });
+
+  // At the end of a match this starts another with the same people in the same
+  // seats; between hands it just skips the wait before the next deal.
+  const action = view.phase === 'gameOver' ? 'rematch' : 'ready';
+  const result = await api(`/api/rooms/${session.code}/${action}`, {
+    token: session.token,
+  });
   if (result.error) flash(result.error);
 }
 
@@ -687,15 +689,6 @@ function connect() {
     // EventSource retries on its own; just say so.
     el('disconnected').hidden = false;
   };
-}
-
-function leaveTable() {
-  stream?.close();
-  stream = null;
-  view = null;
-  clearSession();
-  el('overlay').hidden = true;
-  show('screen-lobby');
 }
 
 // ------------------------------------------------------------------ routing

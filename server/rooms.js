@@ -297,6 +297,25 @@ function scheduleTurn(room) {
   }, BOT_PAUSE_MS);
 }
 
+/**
+ * A fresh match with the same people in the same seats. Anyone still at the
+ * table can call it — asking "again?" is not a privilege of whoever opened the
+ * room.
+ */
+export function rematch(room, seat) {
+  if (room.status !== 'finished') return { error: 'That match is still going.' };
+
+  const player = room.seats[seat];
+  if (!player || player.kind !== 'human') return { error: 'Not your table.' };
+
+  room.game = createGame({ targetScore: DEFAULT_TARGET });
+  room.status = 'playing';
+  dealHand(room);
+  room.message = `${player.name} started a new match. ${room.message}`;
+  broadcast(room);
+  return { ok: true };
+}
+
 /** Skip the post-hand pause. */
 export function ready(room, seat) {
   if (!room.game || room.game.phase !== 'handOver') return { error: 'Nothing to skip.' };

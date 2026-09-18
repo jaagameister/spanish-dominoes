@@ -7,6 +7,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { start, server } from '../server/server.js';
+import { getRoom } from '../server/rooms.js';
 
 // Bound in `before` rather than at module scope: a top-level await here hangs
 // the test runner before it registers anything.
@@ -419,6 +420,38 @@ test('play runs to the end of a hand without waiting on anyone', async () => {
 
   stream.close();
   assert.ok(finished, 'the hand reached a result unaided');
+});
+
+// --------------------------------------------------------------- rematch
+
+test('a finished match can be played again with the same seating', async () => {
+  const host = await post('/api/rooms', { name: 'Freeman' });
+  const guest = await post(`/api/rooms/${host.code}/join`, { name: 'Ada' });
+  await post(`/api/rooms/${host.code}/start`, { token: host.token });
+
+  const room = getRoom(host.code);
+  // Jump to a finished match rather than playing a hundred points of dominoes.
+  room.game.scores = [104, 61];
+  room.game.phase = 'gameOver';
+  room.game.winningTeam = 0;
+  room.status = 'finished';
+
+  const again = await post(`/api/rooms/${host.code}/rematch`, { token: guest.token });
+  assert.ok(again.ok, 'anyone at the table can ask for another');
+
+  const view = await firstEvent(`/api/rooms/${host.code}/stream?token=${host.token}`);
+  assert.equal(view.phase, 'playing', 'a new match is under way');
+  assert.deepEqual(view.scores, [0, 0], 'from nothing');
+  assert.equal(view.handNumber, 1);
+  assert.equal(view.hand.length, 7, 'and freshly dealt');
+  assert.equal(view.players[0].name, 'Freeman', 'same people');
+  assert.equal(view.players[2].name, 'Ada', 'in the same seats');
+});
+
+test('a rematch is refused while the match is still going', async () => {
+  const { host } = await seatedGame();
+  const result = await post(`/api/rooms/${host.code}/rematch`, { token: host.token });
+  assert.ok(result.error);
 });
 
 test('a player cannot play a tile they do not hold', async () => {

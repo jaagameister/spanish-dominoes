@@ -19,6 +19,7 @@ import {
   ready,
   arrange,
   rename,
+  rematch,
   subscribe,
   heartbeat,
   collectIdleRooms,
@@ -132,7 +133,7 @@ const server = createServer(async (req, res) => {
     }
 
     const match = path.match(
-      /^\/api\/rooms\/([A-Za-z0-9]{4})\/(join|start|action|ready|arrange|name|stream)$/,
+      /^\/api\/rooms\/([A-Za-z0-9]{4})\/(join|start|action|ready|arrange|name|rematch|stream)$/,
     );
     if (!match) return json(res, 404, { error: 'Not found' });
 
@@ -169,7 +170,9 @@ const server = createServer(async (req, res) => {
             ? arrange(room, seat, body.from, body.to)
             : action === 'name'
               ? rename(room, seat, body.name)
-              : act(room, seat, body);
+              : action === 'rematch'
+                ? rematch(room, seat)
+                : act(room, seat, body);
 
     if (result.error) return json(res, 400, result);
     return json(res, 200, { ok: true, state: viewFor(room, seat) });
