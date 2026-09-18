@@ -13,8 +13,11 @@
   --us: #4ade80;
   --them: #fbbf24;
 
-  /* Seat colours are positions on screen, not people: south is always whoever
-     is looking, so the same colour always means "you". */
+  /* Player colours, named for where that player sits relative to the host —
+     the host is south. They are fixed per player, not per viewer, so everyone
+     at the table sees the same person in the same colour. Where a player
+     *appears* on screen is a separate thing: you always sit at the bottom of
+     your own screen, whatever colour you are. */
   --north: #60a5fa;
   --south: #f87171;
   --east: #4ade80;
@@ -25,9 +28,6 @@
   --bone-dead: #8f9a92;
   --pip: #1b1f1d;
 
-  /* Your own colour, so a lit tile in hand reads as "mine to play" rather than
-     borrowing the green that now means the player to the east. */
-  --playable: var(--south);
   --radius: 8px;
 }
 
@@ -350,17 +350,26 @@ input[type='text']:focus {
   background: #131f19;
 }
 
-.roster__who--north {
-  color: var(--north);
+/**
+ * A player's colour, set once on any element that represents them. Anchored on
+ * the host rather than the viewer, so everyone at the table sees the same
+ * person in the same colour — see hueOf() in app.js.
+ */
+.hue--south {
+  --hue: var(--south);
 }
-.roster__who--south {
-  color: var(--south);
+.hue--west {
+  --hue: var(--west);
 }
-.roster__who--east {
-  color: var(--east);
+.hue--north {
+  --hue: var(--north);
 }
-.roster__who--west {
-  color: var(--west);
+.hue--east {
+  --hue: var(--east);
+}
+
+.roster__who {
+  color: var(--hue, var(--fg));
 }
 
 .roster__tag {
@@ -493,19 +502,9 @@ input[type='text']:focus {
   transition: border-color 0.2s, box-shadow 0.2s;
 }
 
-.seat--north {
-  --seat-colour: var(--north);
-}
-.seat--west {
-  --seat-colour: var(--west);
-}
-.seat--east {
-  --seat-colour: var(--east);
-}
-
 .seat--active {
-  border-color: var(--seat-colour);
-  box-shadow: 0 0 0 1px var(--seat-colour), 0 0 18px -6px var(--seat-colour);
+  border-color: var(--hue);
+  box-shadow: 0 0 0 1px var(--hue), 0 0 18px -6px var(--hue);
 }
 
 .seat__name {
@@ -513,7 +512,7 @@ input[type='text']:focus {
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--seat-colour);
+  color: var(--hue);
 }
 
 .seat__count {
@@ -639,22 +638,9 @@ input[type='text']:focus {
  * a full table shows four — fewer when someone's last turn was a pass.
  */
 .line .tile--recent {
-  outline: 2px solid var(--played-colour, var(--muted));
+  outline: 2px solid var(--hue, var(--muted));
   outline-offset: 2px;
   border-radius: 5px;
-}
-
-.tile--by-north {
-  --played-colour: var(--north);
-}
-.tile--by-south {
-  --played-colour: var(--south);
-}
-.tile--by-east {
-  --played-colour: var(--east);
-}
-.tile--by-west {
-  --played-colour: var(--west);
 }
 
 .end-marker {
@@ -733,9 +719,9 @@ input[type='text']:focus {
   color: var(--muted);
 }
 
-/* You sit south, always. */
+/* Your own colour — whichever it is; you are not always south. */
 .you__name {
-  color: var(--south);
+  color: var(--hue, var(--fg));
   font-weight: 600;
 }
 
@@ -754,7 +740,7 @@ input[type='text']:focus {
 
 .hand .tile--playable {
   cursor: pointer;
-  outline: 2px solid var(--playable);
+  outline: 2px solid var(--hue, var(--fg));
   outline-offset: 2px;
 }
 

@@ -88,11 +88,23 @@ function positions() {
   };
 }
 
+const HUE_BY_OFFSET = ['south', 'west', 'north', 'east'];
+
 /**
- * Where a seat sits on *this* viewer's screen. Colours follow the compass
- * point, not the person, so south always means you — at every table, in every
- * seat.
+ * A player's colour, which is the same on every screen at the table.
+ *
+ * Colour cannot be viewer-relative and also agreed between players: if south
+ * always meant "me", we would each be red and none of us could talk about it.
+ * So colour is anchored on the host — the host is south — and everyone else
+ * takes their colour from their seat relative to them. Where a player *appears*
+ * is still viewer-relative, which is why these two functions disagree: you sit
+ * at the bottom of your own screen whatever colour you happen to be.
  */
+function hueOf(seat) {
+  return HUE_BY_OFFSET[(seat - (view.hostSeat ?? 0) + 4) % 4];
+}
+
+/** Where a seat sits on *this* viewer's screen. Layout only, never colour. */
 function positionOf(seat) {
   const me = view.seat;
   if (seat === me) return 'south';
@@ -180,7 +192,7 @@ function renderWaitingRoom() {
     // Colour the name by where that seat will appear on this viewer's screen,
     // so the mapping is already familiar by the time play starts.
     who.className = filled
-      ? `roster__who roster__who--${positionOf(seat)}`
+      ? `roster__who hue--${hueOf(seat)}`
       : 'roster__who';
     who.textContent = filled ? nameOf(seat) : 'Empty — a bot will sit here';
 
@@ -275,7 +287,10 @@ function renderSeats() {
   const where = positions();
   for (const [side, seat] of Object.entries(where)) {
     const panel = el(`seat-${side}`);
-    panel.className = `seat seat--${side}`;
+    // Two independent things: seat--<side> places the panel on this viewer's
+    // screen, hue--<colour> gives the player the colour everyone else sees them
+    // in. They rarely agree, and that is the point.
+    panel.className = `seat seat--${side} hue--${hueOf(seat)}`;
     if (seat === (view.seat + 2) % 4) panel.classList.add('seat--partner');
     if (view.turn === seat) panel.classList.add('seat--active');
     panel.innerHTML = '';
@@ -342,7 +357,7 @@ function recentPlays() {
 
   const byTile = new Map();
   for (const [seat, entry] of latestTurn) {
-    if (entry.type === 'play') byTile.set(entry.tileId, positionOf(seat));
+    if (entry.type === 'play') byTile.set(entry.tileId, hueOf(seat));
   }
   return byTile;
 }
@@ -370,8 +385,8 @@ function renderLine() {
   for (const placed of view.line) {
     // Doubles are laid crosswise, as on a real table.
     const tile = tileNode(placed.a, placed.b, placed.double ? 'v' : 'h');
-    const position = recent.get(placed.id);
-    if (position) tile.classList.add('tile--recent', `tile--by-${position}`);
+    const hue = recent.get(placed.id);
+    if (hue) tile.classList.add('tile--recent', `hue--${hue}`);
     line.appendChild(tile);
   }
 
@@ -397,6 +412,8 @@ function renderHand() {
 
   const me = view.players[view.seat];
   el('your-name').textContent = me ? `${me.name} — your hand` : 'Your hand';
+  // Your own colour, so your hand matches how the others see you.
+  document.querySelector('.you').className = `you hue--${hueOf(view.seat)}`;
 
   const myTurn = view.turn === view.seat && view.phase === 'playing';
 
