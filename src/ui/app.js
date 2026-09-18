@@ -780,16 +780,47 @@ el('btn-start').addEventListener('click', async () => {
   if (result.error) flash(result.error, 'wait-error');
 });
 
-el('btn-copy').addEventListener('click', async () => {
-  try {
-    await navigator.clipboard.writeText(inviteUrl());
-    el('btn-copy').textContent = 'Link copied';
-    setTimeout(() => {
-      el('btn-copy').textContent = 'Copy the invite link';
-    }, 2000);
-  } catch {
-    flash('Copy failed — the link is written below.', 'wait-error');
+/**
+ * navigator.clipboard exists only in a secure context, so over plain HTTP —
+ * which is exactly how this gets used on a home network — it is simply absent.
+ * The old execCommand route still works there.
+ */
+async function copyText(text) {
+  if (navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      // Denied or unavailable; fall through.
+    }
   }
+
+  const scratch = document.createElement('textarea');
+  scratch.value = text;
+  scratch.setAttribute('readonly', '');
+  scratch.style.position = 'fixed';
+  scratch.style.opacity = '0';
+  document.body.appendChild(scratch);
+  scratch.select();
+  try {
+    return document.execCommand('copy');
+  } catch {
+    return false;
+  } finally {
+    scratch.remove();
+  }
+}
+
+el('btn-copy').addEventListener('click', async () => {
+  const copied = await copyText(inviteUrl());
+  if (!copied) {
+    flash('Copy failed — the link is written below.', 'wait-error');
+    return;
+  }
+  el('btn-copy').textContent = 'Link copied';
+  setTimeout(() => {
+    el('btn-copy').textContent = 'Copy the invite link';
+  }, 2000);
 });
 
 el('overlay-button').addEventListener('click', onOverlayButton);
