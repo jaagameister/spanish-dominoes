@@ -9,6 +9,6 @@
   },
   "scripts": {
     "start": "node server/main.js",
-    "test": "node --test"
+    "test": "BOT_PAUSE_MS=20 FORCED_PASS_PAUSE_MS=15 HAND_REVIEW_MS=200 node --test"
   }
 }

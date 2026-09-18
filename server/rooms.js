@@ -19,10 +19,12 @@ import { explainChoice } from '../src/engine/bot.js';
 import { viewFor } from './protocol.js';
 
 const SEATS = 4;
-const BOT_PAUSE_MS = 1100;
-const FORCED_PASS_PAUSE_MS = 900;
+// Deliberate pacing so play is watchable, not a technical constraint — the
+// tests turn it down so a full hand does not take half a minute of real time.
+const BOT_PAUSE_MS = Number(process.env.BOT_PAUSE_MS ?? 1100);
+const FORCED_PASS_PAUSE_MS = Number(process.env.FORCED_PASS_PAUSE_MS ?? 900);
 /** How long the table lingers on a finished hand before dealing the next. */
-const HAND_REVIEW_MS = 20000;
+const HAND_REVIEW_MS = Number(process.env.HAND_REVIEW_MS ?? 20000);
 /** Rooms with nobody connected are collected after this long. */
 const ROOM_TTL_MS = 60 * 60 * 1000;
 
