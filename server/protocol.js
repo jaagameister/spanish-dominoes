@@ -57,6 +57,16 @@ export function viewFor(room, seat) {
     // Where another device should point to reach this table. The host's own
     // browser only knows "localhost", which is no use to anyone else.
     inviteOrigin: lanOrigin(),
+    // The shared step-through of a finished hand. Every hand is face up here,
+    // which is only safe because review cannot open while one is being played —
+    // see startReview.
+    review: room.review
+      ? {
+          cursor: room.review.cursor,
+          total: room.review.frames.length,
+          frame: room.review.frames[room.review.cursor],
+        }
+      : null,
   };
 
   if (!game) {

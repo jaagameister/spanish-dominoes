@@ -173,6 +173,19 @@
         <span id="status-text"></span>
       </div>
 
+      <div class="reviewbar" id="reviewbar" hidden>
+        <div class="reviewbar__move">
+          <span id="review-move"></span>
+          <span class="reviewbar__count" id="review-count"></span>
+        </div>
+        <ul class="reviewbar__why" id="review-why"></ul>
+        <div class="reviewbar__controls">
+          <button type="button" class="ghost" id="review-prev">Previous</button>
+          <button type="button" id="review-next">Next</button>
+          <button type="button" class="ghost" id="review-finish">Finish</button>
+        </div>
+      </div>
+
       <section class="you">
         <div class="you__header">
           <span class="you__name" id="your-name">Your hand</span>
@@ -199,20 +212,6 @@
           <button type="button" id="overlay-button"></button>
         </div>
         <p class="muted small" id="overlay-countdown"></p>
-      </div>
-    </div>
-
-    <div class="review" id="review" hidden>
-      <div class="review__card">
-        <header class="review__head">
-          <h2>Hand review</h2>
-          <button type="button" class="ghost" id="review-close">Close</button>
-        </header>
-        <p class="review__hint">
-          Every move of the hand, and what each bot was weighing when it chose.
-          Section numbers refer to <code>STRATEGY.md</code>.
-        </p>
-        <ol class="review__list" id="review-list"></ol>
       </div>
     </div>
 

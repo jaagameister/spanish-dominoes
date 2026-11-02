@@ -16,6 +16,7 @@ import {
   DEFAULT_TARGET,
 } from '../src/engine/game.js';
 import { explainChoice } from '../src/engine/bot.js';
+import { buildFrames } from './replay.js';
 import { viewFor } from './protocol.js';
 
 const SEATS = 4;
@@ -71,6 +72,8 @@ export function createRoom(name) {
     message: 'Waiting for players.',
     subscribers: new Set(),
     timer: null,
+    handStart: null,
+    review: null,
   };
   rooms.set(room.code, room);
 
@@ -198,6 +201,14 @@ export function arrange(room, seat, from, to) {
 function dealHand(room) {
   startHand(room.game);
   room.log = [];
+  room.review = null;
+  // The deal itself, kept so the hand can be replayed from the start later.
+  // Tiles are never mutated, so copying the four arrays is copy enough.
+  room.handStart = {
+    startingHands: room.game.hands.map((hand) => hand.slice()),
+    starter: room.game.starter,
+    openingTileId: room.game.openingTileId,
+  };
   const opener = room.seats[room.game.starter].name;
   room.message =
     room.game.handNumber === 1
@@ -266,7 +277,9 @@ function afterMove(room, result, moverSeat) {
 
   // Hand over: leave it on screen long enough to review, then deal again.
   clearTimeout(room.timer);
-  room.timer = later(() => dealHand(room), HAND_REVIEW_MS);
+  room.timer = later(() => {
+    if (!room.review) dealHand(room);
+  }, HAND_REVIEW_MS);
 }
 
 /** Drive bot turns, and auto-pass for anyone with no legal tile. */
@@ -320,6 +333,60 @@ export function rematch(room, seat) {
 export function ready(room, seat) {
   if (!room.game || room.game.phase !== 'handOver') return { error: 'Nothing to skip.' };
   clearTimeout(room.timer);
+  dealHand(room);
+  return { ok: true };
+}
+
+// ----------------------------------------------------------------- review
+
+/**
+ * Open the step-through of the hand just finished.
+ *
+ * The cursor lives here rather than in each browser because everyone at the
+ * table has to be looking at the same move — a replay where two people are on
+ * different frames is worse than no replay at all.
+ */
+export function startReview(room, seat) {
+  if (!room.game || room.game.phase === 'playing') {
+    return { error: 'There is no finished hand to look at.' };
+  }
+  if (!room.handStart) return { error: 'Nothing was dealt yet.' };
+
+  if (!room.review) {
+    room.review = {
+      cursor: 0,
+      frames: buildFrames({ ...room.handStart, log: room.log }),
+    };
+    // Whoever opened it decides when it ends; the auto-deal would yank the
+    // table away mid-replay.
+    clearTimeout(room.timer);
+  }
+
+  room.message = `${room.seats[seat].name} opened the review.`;
+  broadcast(room);
+  return { ok: true };
+}
+
+/** Step the shared cursor. Anyone at the table may drive. */
+export function reviewStep(room, seat, delta) {
+  if (!room.review) return { error: 'Not reviewing.' };
+
+  const last = room.review.frames.length - 1;
+  const next = Math.min(last, Math.max(0, room.review.cursor + Math.sign(delta)));
+  if (next === room.review.cursor) return { ok: true };
+
+  room.review.cursor = next;
+  broadcast(room);
+  return { ok: true };
+}
+
+/** Close the review and carry on: another match, or the next hand. */
+export function finishReview(room, seat) {
+  if (!room.review) return { error: 'Not reviewing.' };
+  room.review = null;
+
+  if (room.status === 'finished') return rematch(room, seat);
+
   dealHand(room);
   return { ok: true };
 }

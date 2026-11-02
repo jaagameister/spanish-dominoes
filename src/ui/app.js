@@ -275,15 +275,21 @@ function renderTable() {
   el('target').textContent = view.targetScore;
   el('hand-number').textContent = `Hand ${view.handNumber}`;
 
-  renderSeats();
-  renderLine();
-  renderHand();
-  renderStatus();
-  renderEndPicker();
-  renderOverlay();
+  // While a review is open everything on screen comes from its frame instead
+  // of the live table. The scoreboard above stays live: the match score is not
+  // part of what is being replayed.
+  const frame = view.review?.frame ?? null;
+
+  renderSeats(frame);
+  renderLine(frame);
+  renderHand(frame);
+  renderStatus(frame);
+  renderEndPicker(frame);
+  renderReviewBar();
+  renderOverlay(frame);
 }
 
-function renderSeats() {
+function renderSeats(frame) {
   const where = positions();
   for (const [side, seat] of Object.entries(where)) {
     const panel = el(`seat-${side}`);
@@ -292,7 +298,9 @@ function renderSeats() {
     // in. They rarely agree, and that is the point.
     panel.className = `seat seat--${side} hue--${hueOf(seat)}`;
     if (seat === (view.seat + 2) % 4) panel.classList.add('seat--partner');
-    if (view.turn === seat) panel.classList.add('seat--active');
+    // Live: whose turn it is. Replaying: who made the move on screen.
+    const spotlit = frame ? frame.move?.seat === seat : view.turn === seat;
+    if (spotlit) panel.classList.add('seat--active');
     panel.innerHTML = '';
 
     const player = view.players[seat];
@@ -310,25 +318,34 @@ function renderSeats() {
       name.appendChild(tag);
     }
 
+    // The point of the replay is seeing what everyone was holding, so during
+    // one the backs come off.
+    const held = frame ? frame.hands[seat] : null;
     const count = document.createElement('div');
-    count.className = 'seat__count';
-    for (let i = 0; i < player.tiles; i++) {
-      const back = document.createElement('span');
-      back.className = 'back';
-      count.appendChild(back);
+    if (held) {
+      count.className = 'seat__tiles';
+      for (const tile of held) count.appendChild(tileNode(tile.high, tile.low, 'h'));
+    } else {
+      count.className = 'seat__count';
+      for (let i = 0; i < player.tiles; i++) {
+        const back = document.createElement('span');
+        back.className = 'back';
+        count.appendChild(back);
+      }
     }
 
+    const remaining = held ? held.length : player.tiles;
     const meta = document.createElement('div');
     meta.className = 'seat__meta';
-    meta.textContent = `${player.tiles} tile${player.tiles === 1 ? '' : 's'}`;
-    if (player.kind === 'human' && !player.connected) {
+    meta.textContent = `${remaining} tile${remaining === 1 ? '' : 's'}`;
+    if (!frame && player.kind === 'human' && !player.connected) {
       meta.textContent += ' · offline';
     }
 
     panel.append(name, count, meta);
 
     // A pass is public at a real table, so showing it is bookkeeping, not help.
-    if (player.voids.length > 0) {
+    if (!frame && player.voids.length > 0) {
       const row = document.createElement('div');
       row.className = 'seat__voids';
       row.append('void in');
@@ -362,27 +379,37 @@ function recentPlays() {
   return byTile;
 }
 
-function renderLine() {
+function renderLine(frame) {
   const line = el('line');
   line.innerHTML = '';
-  el('board-empty').hidden = view.line.length > 0;
 
-  el('ends').hidden = !view.ends;
-  if (!view.ends) return;
-  el('end-left').textContent = view.ends.left;
-  el('end-right').textContent = view.ends.right;
+  const placedTiles = frame ? frame.line : view.line;
+  el('board-empty').hidden = placedTiles.length > 0;
+
+  const ends = placedTiles.length
+    ? { left: placedTiles[0].a, right: placedTiles[placedTiles.length - 1].b }
+    : null;
+
+  el('ends').hidden = !ends;
+  if (!ends) return;
+  el('end-left').textContent = ends.left;
+  el('end-right').textContent = ends.right;
 
   const left = document.createElement('span');
   left.className = 'end-marker';
-  left.textContent = `end ${view.ends.left}`;
+  left.textContent = `end ${ends.left}`;
   line.appendChild(left);
 
-  // Ringed in each player's colour: their latest tile, until they play another.
-  // The line is rebuilt every render, so a ring that should have moved on is
-  // simply not drawn again.
-  const recent = recentPlays();
+  // Live, each player's latest tile is ringed in their colour. Replaying, only
+  // the one tile this frame just put down is — that is the whole point of the
+  // step.
+  const recent = frame
+    ? new Map(
+        frame.move?.tileId ? [[frame.move.tileId, hueOf(frame.move.seat)]] : [],
+      )
+    : recentPlays();
 
-  for (const placed of view.line) {
+  for (const placed of placedTiles) {
     // Doubles are laid crosswise, as on a real table.
     const tile = tileNode(placed.a, placed.b, placed.double ? 'v' : 'h');
     const hue = recent.get(placed.id);
@@ -392,7 +419,7 @@ function renderLine() {
 
   const right = document.createElement('span');
   right.className = 'end-marker';
-  right.textContent = `end ${view.ends.right}`;
+  right.textContent = `end ${ends.right}`;
   line.appendChild(right);
 
   const scroller = el('board-scroll');
@@ -403,21 +430,24 @@ function movesForTile(tileId) {
   return view.legalMoves.filter((move) => move.tileId === tileId);
 }
 
-function renderHand() {
+function renderHand(frame) {
   const hand = el('hand');
   hand.innerHTML = '';
 
-  const pips = view.hand.reduce((sum, t) => sum + t.high + t.low, 0);
+  const tiles = frame ? frame.hands[view.seat] : view.hand;
+  const pips = tiles.reduce((sum, t) => sum + t.high + t.low, 0);
   el('your-pips').textContent = `${pips} pips`;
 
   const me = view.players[view.seat];
-  el('your-name').textContent = me ? `${me.name} — your hand` : 'Your hand';
+  el('your-name').textContent = me
+    ? `${me.name} — ${frame ? 'your hand at this point' : 'your hand'}`
+    : 'Your hand';
   // Your own colour, so your hand matches how the others see you.
   document.querySelector('.you').className = `you hue--${hueOf(view.seat)}`;
 
-  const myTurn = view.turn === view.seat && view.phase === 'playing';
+  const myTurn = !frame && view.turn === view.seat && view.phase === 'playing';
 
-  for (const tile of view.hand) {
+  for (const tile of tiles) {
     const node = tileNode(tile.high, tile.low, 'v');
     const moves = myTurn ? movesForTile(tile.id) : [];
 
@@ -433,10 +463,13 @@ function renderHand() {
   }
 }
 
-function renderStatus() {
+function renderStatus(frame) {
   const text = el('status-text');
 
-  if (view.phase === 'playing' && view.turn === view.seat) {
+  if (frame) {
+    // The review bar below says everything there is to say.
+    text.textContent = '';
+  } else if (view.phase === 'playing' && view.turn === view.seat) {
     text.innerHTML =
       view.legalMoves.length === 0
         ? 'Nothing you can play — you must <strong>pass</strong>.'
@@ -452,9 +485,9 @@ function escape(value) {
   return node.innerHTML;
 }
 
-function renderEndPicker() {
+function renderEndPicker(frame) {
   const picker = el('endpick');
-  if (!selected || !view.ends) {
+  if (frame || !selected || !view.ends) {
     picker.hidden = true;
     return;
   }
@@ -497,11 +530,12 @@ async function play(tileId, end) {
 
 // ------------------------------------------------------------------ results
 
-function renderOverlay() {
+function renderOverlay(frame) {
   const overlay = el('overlay');
   const over = view.phase === 'handOver' || view.phase === 'gameOver';
 
-  if (!over || overlayDismissed) {
+  // The result card would sit on top of the very board being replayed.
+  if (frame || !over || overlayDismissed) {
     overlay.hidden = true;
     return;
   }
@@ -557,6 +591,20 @@ function renderOverlay() {
   overlay.hidden = false;
 }
 
+/** Drive the shared replay. Every player's screen follows. */
+async function reviewAction(step) {
+  const result = await api(`/api/rooms/${session.code}/review`, {
+    token: session.token,
+    step,
+  });
+  if (result.error) flash(result.error, 'wait-error');
+  // Opening the review replaces the result card; closing it deals on.
+  if (step === 'open' || step === 'finish') {
+    overlayDismissed = step === 'open';
+    el('overlay').hidden = true;
+  }
+}
+
 async function onOverlayButton() {
   overlayDismissed = true;
   el('overlay').hidden = true;
@@ -572,10 +620,6 @@ async function onOverlayButton() {
 
 // ------------------------------------------------------------------- review
 
-function seatClass(seat) {
-  if (seat === view.seat) return 'move--you';
-  return seat === (view.seat + 2) % 4 ? 'move--partner' : 'move--opponent';
-}
 
 function describePass(open) {
   if (!open) return 'passed';
@@ -586,84 +630,57 @@ function describePass(open) {
     : `passed — held no ${left} and no ${right}`;
 }
 
-function renderReview() {
-  const list = el('review-list');
-  list.innerHTML = '';
+/**
+ * The replay controls, and what this step was. Anyone at the table can drive:
+ * the cursor is the server's, so a press moves everyone's screen together.
+ */
+function renderReviewBar() {
+  const bar = el('reviewbar');
+  const replay = view.review;
+  bar.hidden = !replay;
+  if (!replay) return;
 
-  view.log.forEach((entry, index) => {
-    const item = document.createElement('li');
-    item.className = `move ${seatClass(entry.seat)}`;
+  const { cursor, total, frame } = replay;
+  const move = frame.move;
 
-    const head = document.createElement('div');
-    head.className = 'move__head';
+  el('review-count').textContent =
+    cursor === 0 ? 'as dealt' : `move ${cursor} of ${total - 1}`;
 
-    const who = document.createElement('span');
-    who.className = 'move__seat';
-    who.textContent = `${index + 1}. ${nameOf(entry.seat)}`;
+  const label = el('review-move');
+  label.className = move ? `reviewbar__who hue--${hueOf(move.seat)}` : 'reviewbar__who';
+  label.textContent = !move
+    ? 'The hand as it was dealt.'
+    : move.type === 'pass'
+      ? `${nameOf(move.seat)} ${describePass(move.ends)}`
+      : `${nameOf(move.seat)} played ${move.tileId} ${END_TEXT[move.end]}`;
 
-    const what = document.createElement('span');
-    what.className = 'move__what';
-    what.textContent =
-      entry.type === 'pass'
-        ? describePass(entry.ends)
-        : `played ${entry.tileId} ${END_TEXT[entry.end]}`;
+  const why = el('review-why');
+  why.innerHTML = '';
+  const explanation = move?.explanation;
 
-    head.append(who, what);
-
-    if (entry.explanation?.forced) {
-      const tag = document.createElement('span');
-      tag.className = 'move__forced';
-      tag.textContent = 'forced';
-      head.appendChild(tag);
+  if (explanation?.forced) {
+    const li = document.createElement('li');
+    li.className = 'reviewbar__note';
+    li.textContent = `${explanation.onlyTile} was the only tile that would go down.`;
+    why.appendChild(li);
+  } else if (explanation?.reasons?.length) {
+    // Heaviest considerations first — that is what drove the choice.
+    for (const reason of [...explanation.reasons]
+      .sort((a, b) => Math.abs(b.value) - Math.abs(a.value))
+      .slice(0, 4)) {
+      const li = document.createElement('li');
+      const weight = document.createElement('span');
+      weight.className = `weight ${reason.value > 0 ? 'weight--plus' : 'weight--minus'}`;
+      weight.textContent = reason.value > 0 ? `+${reason.value}` : `${reason.value}`;
+      const text = document.createElement('span');
+      text.textContent = reason.text;
+      li.append(weight, text);
+      why.appendChild(li);
     }
+  }
 
-    item.appendChild(head);
-
-    if (entry.explanation?.forced) {
-      const note = document.createElement('p');
-      note.className = 'move__alt';
-      note.textContent = `${entry.explanation.onlyTile} was the only tile that would go down.`;
-      item.appendChild(note);
-      list.appendChild(item);
-      return;
-    }
-
-    const reasons = entry.explanation?.reasons ?? [];
-    if (reasons.length > 0) {
-      const ul = document.createElement('ul');
-      ul.className = 'move__reasons';
-      // Heaviest considerations first — that is what drove the choice.
-      for (const reason of [...reasons].sort(
-        (a, b) => Math.abs(b.value) - Math.abs(a.value),
-      )) {
-        const li = document.createElement('li');
-        const weight = document.createElement('span');
-        weight.className = `weight ${reason.value > 0 ? 'weight--plus' : 'weight--minus'}`;
-        weight.textContent = reason.value > 0 ? `+${reason.value}` : `${reason.value}`;
-        const text = document.createElement('span');
-        text.textContent = reason.text;
-        li.append(weight, text);
-        ul.appendChild(li);
-      }
-      item.appendChild(ul);
-    }
-
-    const runnerUp = entry.explanation?.runnerUp;
-    if (runnerUp) {
-      const alt = document.createElement('p');
-      alt.className = 'move__alt';
-      const mine = entry.explanation.score;
-      const theirs = runnerUp.score;
-      const other = `${runnerUp.move.tileId} ${END_TEXT[runnerUp.move.end]}`;
-      alt.textContent =
-        Math.abs(mine - theirs) < 0.05
-          ? `Rated identically to ${other} — the choice was arbitrary.`
-          : `Preferred over ${other} (${mine.toFixed(1)} vs ${theirs.toFixed(1)}).`;
-      item.appendChild(alt);
-    }
-
-    list.appendChild(item);
-  });
+  el('review-prev').disabled = cursor === 0;
+  el('review-next').disabled = cursor === total - 1;
 }
 
 // ---------------------------------------------------------------- streaming
@@ -834,13 +851,15 @@ el('btn-copy').addEventListener('click', async () => {
 });
 
 el('overlay-button').addEventListener('click', onOverlayButton);
-el('overlay-review').addEventListener('click', () => {
-  renderReview();
-  el('review').hidden = false;
-});
-el('review-close').addEventListener('click', () => {
-  el('review').hidden = true;
-});
+el('overlay-review').addEventListener('click', () => reviewAction('open'));
+
+for (const [id, step] of [
+  ['review-prev', 'previous'],
+  ['review-next', 'next'],
+  ['review-finish', 'finish'],
+]) {
+  el(id).addEventListener('click', () => reviewAction(step));
+}
 el('pick-cancel').addEventListener('click', () => {
   selected = null;
   render();

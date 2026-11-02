@@ -20,6 +20,9 @@ import {
   arrange,
   rename,
   rematch,
+  startReview,
+  reviewStep,
+  finishReview,
   subscribe,
   heartbeat,
   collectIdleRooms,
@@ -85,6 +88,15 @@ async function serveStatic(req, res, pathname) {
   }
 }
 
+/** One endpoint drives the shared replay: open it, step it, or close it. */
+function reviewAction(room, seat, step) {
+  if (step === 'open') return startReview(room, seat);
+  if (step === 'finish') return finishReview(room, seat);
+  if (step === 'next') return reviewStep(room, seat, 1);
+  if (step === 'previous') return reviewStep(room, seat, -1);
+  return { error: 'Unknown review step.' };
+}
+
 /** Resolve `{ room, seat }` from a room code plus a player token. */
 function authenticate(code, token) {
   const room = getRoom(code);
@@ -133,7 +145,7 @@ const server = createServer(async (req, res) => {
     }
 
     const match = path.match(
-      /^\/api\/rooms\/([A-Za-z0-9]{4})\/(join|start|action|ready|arrange|name|rematch|stream)$/,
+      /^\/api\/rooms\/([A-Za-z0-9]{4})\/(join|start|action|ready|arrange|name|rematch|review|stream)$/,
     );
     if (!match) return json(res, 404, { error: 'Not found' });
 
@@ -172,7 +184,9 @@ const server = createServer(async (req, res) => {
               ? rename(room, seat, body.name)
               : action === 'rematch'
                 ? rematch(room, seat)
-                : act(room, seat, body);
+                : action === 'review'
+                  ? reviewAction(room, seat, body.step)
+                  : act(room, seat, body);
 
     if (result.error) return json(res, 400, result);
     return json(res, 200, { ok: true, state: viewFor(room, seat) });

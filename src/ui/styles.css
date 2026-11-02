@@ -922,108 +922,41 @@ button:hover {
   color: var(--muted);
 }
 
-/* ------------------------------------------------------------- review */
+/* ---------------------------------------------------------- replay bar */
 
-.review {
-  position: fixed;
-  inset: 0;
-  background: rgb(6 10 8 / 0.85);
-  display: grid;
-  place-items: center;
-  padding: 1rem;
-  z-index: 20;
-}
-
-.review__card {
+.reviewbar {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: 12px;
-  width: min(46rem, 100%);
-  max-height: 85vh;
-  display: flex;
-  flex-direction: column;
-  padding: 1.25rem 1.5rem;
-}
-
-.review__head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-}
-
-.review__head h2 {
-  margin: 0;
-  font-size: 1.1rem;
-}
-
-.review__hint {
-  margin: 0.35rem 0 0.75rem;
-  font-size: 0.8rem;
-  color: var(--muted);
-}
-
-.review__hint code {
-  color: var(--fg);
-}
-
-.review__list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.move {
-  border: 1px solid var(--line);
   border-radius: var(--radius);
-  padding: 0.6rem 0.75rem;
-  background: #131c18;
+  padding: 0.7rem 0.9rem;
 }
 
-.move--you {
-  border-left: 2px solid var(--us);
-}
-
-.move--partner {
-  border-left: 2px solid #2f6b4c;
-}
-
-.move--opponent {
-  border-left: 2px solid var(--them);
-}
-
-.move__head {
+.reviewbar__move {
   display: flex;
   align-items: baseline;
-  gap: 0.5rem;
+  justify-content: space-between;
+  gap: 0.75rem;
   flex-wrap: wrap;
-  font-size: 0.9rem;
 }
 
-.move__seat {
+.reviewbar__who {
   font-weight: 600;
+  color: var(--hue, var(--fg));
 }
 
-.move__what {
-  color: var(--muted);
-}
-
-.move__forced {
-  font-size: 0.7rem;
+.reviewbar__count {
+  font-size: 0.72rem;
+  letter-spacing: 0.07em;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
   color: var(--muted);
-  border: 1px solid var(--line);
-  border-radius: 3px;
-  padding: 0 0.3rem;
+  font-variant-numeric: tabular-nums;
 }
 
-.move__reasons {
-  margin: 0.5rem 0 0;
+.reviewbar__why {
+  margin: 0;
   padding: 0;
   list-style: none;
   display: flex;
@@ -1032,12 +965,51 @@ button:hover {
   font-size: 0.82rem;
 }
 
-.move__reasons li {
+.reviewbar__why li {
   display: grid;
   grid-template-columns: 3.2rem 1fr;
   gap: 0.5rem;
   align-items: baseline;
   color: var(--muted);
+}
+
+.reviewbar__note {
+  display: block !important;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.reviewbar__controls {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.reviewbar__controls button {
+  padding: 0.4rem 1.1rem;
+}
+
+.reviewbar__controls button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.reviewbar__controls #review-finish {
+  margin-left: auto;
+}
+
+/* Hands face up in the seat panels while replaying. */
+.seat__tiles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+}
+
+.seat__tiles .tile {
+  --half: 13px;
+  padding: 1px;
+  gap: 1px;
+  border-radius: 3px;
 }
 
 .weight {
@@ -1054,13 +1026,7 @@ button:hover {
   color: #f87171;
 }
 
-.move__alt {
-  margin: 0.45rem 0 0;
-  font-size: 0.78rem;
-  color: var(--muted);
-  border-top: 1px dashed var(--line);
-  padding-top: 0.4rem;
-}
+
 
 /* ----------------------------------------------------------- narrower */
 

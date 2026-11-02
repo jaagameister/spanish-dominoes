@@ -7,7 +7,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { start, server } from '../server/server.js';
-import { getRoom } from '../server/rooms.js';
+import { getRoom, act, startReview, reviewStep } from '../server/rooms.js';
+import { legalMoves } from '../src/engine/game.js';
 
 // Bound in `before` rather than at module scope: a top-level await here hangs
 // the test runner before it registers anything.
@@ -420,6 +421,157 @@ test('play runs to the end of a hand without waiting on anyone', async () => {
 
   stream.close();
   assert.ok(finished, 'the hand reached a result unaided');
+});
+
+// ---------------------------------------------------------------- review
+
+/**
+ * Play a hand to its end synchronously, taking every seat's turn ourselves.
+ *
+ * Waiting on the bots' timers through a stream makes these tests a race: the
+ * hand finishes whenever it finishes, and an assertion lands wherever it lands.
+ * Driving the room directly gives the same log in a known number of steps.
+ */
+function playOutHand(code) {
+  const room = getRoom(code);
+
+  for (let i = 0; i < 60 && room.game.phase === 'playing'; i++) {
+    const seat = room.game.turn;
+    const moves = legalMoves(room.game, seat);
+    act(room, seat, moves.length ? { type: 'play', ...moves[0] } : { type: 'pass' });
+    // Each move schedules the next one; we are taking those turns ourselves.
+    clearTimeout(room.timer);
+  }
+
+  if (room.game.phase === 'playing') throw new Error('the hand never finished');
+  return room;
+}
+
+test('review is refused while a hand is still being played', async () => {
+  const { host } = await seatedGame();
+  const result = await post(`/api/rooms/${host.code}/review`, {
+    token: host.token,
+    step: 'open',
+  });
+  assert.ok(result.error, 'no peeking mid-hand');
+});
+
+test('no hand but your own is ever sent while play is live', async () => {
+  // The guard that matters: review exposes every hand, so it must be
+  // impossible to open one while the hand is still being played.
+  const { host, guest } = await seatedGame();
+  const mine = await firstEvent(`/api/rooms/${host.code}/stream?token=${host.token}`);
+  assert.equal(mine.review, null);
+
+  const theirs = await firstEvent(`/api/rooms/${host.code}/stream?token=${guest.token}`);
+  const blob = JSON.stringify(mine);
+  for (const tile of theirs.hand) {
+    assert.ok(!blob.includes(`"${tile.id}"`), `leaked ${tile.id}`);
+  }
+});
+
+test('review replays the finished hand from the deal', async () => {
+  const host = await post('/api/rooms', { name: 'Freeman' });
+  await post(`/api/rooms/${host.code}/start`, { token: host.token });
+  const room = playOutHand(host.code);
+
+  startReview(room, 0);
+  const view = await firstEvent(`/api/rooms/${host.code}/stream?token=${host.token}`);
+
+  assert.equal(view.review.cursor, 0, 'opens at the deal');
+  assert.equal(view.review.frame.line.length, 0, 'with nothing on the table');
+  assert.deepEqual(
+    view.review.frame.hands.map((h) => h.length),
+    [7, 7, 7, 7],
+    'and every hand full',
+  );
+  assert.equal(view.review.total, room.log.length + 1, 'one frame per move, plus the deal');
+});
+
+test('every frame accounts for all twenty-eight tiles', async () => {
+  const host = await post('/api/rooms', { name: 'Freeman' });
+  await post(`/api/rooms/${host.code}/start`, { token: host.token });
+  const room = playOutHand(host.code);
+  startReview(room, 0);
+
+  for (let cursor = 0; cursor < room.review.frames.length; cursor++) {
+    const frame = room.review.frames[cursor];
+    const ids = new Set([
+      ...frame.hands.flat().map((t) => t.id),
+      ...frame.line.map((t) => t.id),
+    ]);
+    assert.equal(ids.size, 28, `frame ${cursor} holds every tile exactly once`);
+  }
+});
+
+test('stepping forward lays exactly one more tile', async () => {
+  const host = await post('/api/rooms', { name: 'Freeman' });
+  await post(`/api/rooms/${host.code}/start`, { token: host.token });
+  const room = playOutHand(host.code);
+  startReview(room, 0);
+
+  const frames = room.review.frames;
+  for (let i = 1; i < frames.length; i++) {
+    const grew = frames[i].line.length - frames[i - 1].line.length;
+    const expected = frames[i].move.type === 'pass' ? 0 : 1;
+    assert.equal(grew, expected, `frame ${i} (${frames[i].move.type})`);
+  }
+});
+
+test('the replay cursor is shared, not per browser', async () => {
+  const host = await post('/api/rooms', { name: 'Freeman' });
+  const guest = await post(`/api/rooms/${host.code}/join`, { name: 'Ada' });
+  await post(`/api/rooms/${host.code}/start`, { token: host.token });
+  playOutHand(host.code);
+
+  await post(`/api/rooms/${host.code}/review`, { token: host.token, step: 'open' });
+  // The guest drives; what the host sees has to follow.
+  await post(`/api/rooms/${host.code}/review`, { token: guest.token, step: 'next' });
+  await post(`/api/rooms/${host.code}/review`, { token: guest.token, step: 'next' });
+
+  const hostView = await firstEvent(`/api/rooms/${host.code}/stream?token=${host.token}`);
+  const guestView = await firstEvent(`/api/rooms/${host.code}/stream?token=${guest.token}`);
+
+  assert.equal(hostView.review.cursor, 2, 'the host is on the guest-chosen move');
+  assert.deepEqual(hostView.review.cursor, guestView.review.cursor, 'they agree');
+  assert.deepEqual(
+    hostView.review.frame.line,
+    guestView.review.frame.line,
+    'looking at the same table',
+  );
+  assert.deepEqual(
+    hostView.review.frame.hands,
+    guestView.review.frame.hands,
+    'and the same hands',
+  );
+});
+
+test('the cursor stops at both ends', async () => {
+  const host = await post('/api/rooms', { name: 'Freeman' });
+  await post(`/api/rooms/${host.code}/start`, { token: host.token });
+  const room = playOutHand(host.code);
+  startReview(room, 0);
+
+  reviewStep(room, 0, -1);
+  assert.equal(room.review.cursor, 0, 'cannot go back past the deal');
+
+  const last = room.review.frames.length - 1;
+  for (let i = 0; i < last + 3; i++) reviewStep(room, 0, 1);
+  assert.equal(room.review.cursor, last, 'nor past the final move');
+});
+
+test('finishing the review deals the next hand', async () => {
+  const host = await post('/api/rooms', { name: 'Freeman' });
+  await post(`/api/rooms/${host.code}/start`, { token: host.token });
+  playOutHand(host.code);
+
+  await post(`/api/rooms/${host.code}/review`, { token: host.token, step: 'open' });
+  await post(`/api/rooms/${host.code}/review`, { token: host.token, step: 'finish' });
+
+  const view = await firstEvent(`/api/rooms/${host.code}/stream?token=${host.token}`);
+  assert.equal(view.review, null, 'the replay is closed');
+  assert.equal(view.handNumber, 2, 'and the next hand is dealt');
+  assert.equal(view.hand.length, 7);
 });
 
 // --------------------------------------------------------------- rematch
