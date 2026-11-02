@@ -560,6 +560,11 @@ input[type='text']:focus {
 
 /* -------------------------------------------------------------- board */
 
+/* Give the flanking seats more room while their hands are showing. */
+.table--review {
+  grid-template-columns: minmax(9rem, 13rem) 1fr minmax(9rem, 13rem);
+}
+
 .board {
   grid-area: board;
   position: relative;
@@ -998,18 +1003,19 @@ button:hover {
   margin-left: auto;
 }
 
-/* Hands face up in the seat panels while replaying. */
+/* Hands face up in the seat panels while replaying. These are the whole point
+   of the replay, so they are sized to be read rather than counted. */
 .seat__tiles {
   display: flex;
   flex-wrap: wrap;
-  gap: 2px;
+  gap: 3px;
+  justify-content: center;
 }
 
 .seat__tiles .tile {
-  --half: 13px;
-  padding: 1px;
-  gap: 1px;
-  border-radius: 3px;
+  --half: 22px;
+  padding: 2px;
+  gap: 2px;
 }
 
 .weight {
@@ -1064,6 +1070,10 @@ button:hover {
 
   .line .tile {
     --half: 20px;
+  }
+
+  .seat__tiles .tile {
+    --half: 19px;
   }
 
   /* The seat panels are reference, not the main event — shrink them. */

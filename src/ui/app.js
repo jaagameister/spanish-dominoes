@@ -280,6 +280,8 @@ function renderTable() {
   // part of what is being replayed.
   const frame = view.review?.frame ?? null;
 
+  document.querySelector('.table').classList.toggle('table--review', Boolean(frame));
+
   renderSeats(frame);
   renderLine(frame);
   renderHand(frame);
